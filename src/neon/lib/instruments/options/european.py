@@ -1,6 +1,6 @@
+from neon.lib.greeks import Greeks
 from neon.lib.instruments.options.base import BaseOption
 from neon.lib.instruments.options.option_inputs import OptionInputs
-from neon.lib.greeks import Greeks
 
 
 class EuropeanOption(BaseOption):

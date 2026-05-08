@@ -293,10 +293,6 @@ class TestVolga:
 
 
 class TestLSP:
-    @pytest.mark.xfail(
-        reason="Pre-existing format bug in base.py:11 serialize_option_inputs",
-        strict=True,
-    )
     def test_european_option_works_with_numerical_greeks(self):
         from neon.lib.instruments.options.european import EuropeanOption
         from neon.lib.instruments.options.option_inputs import OptionInputs

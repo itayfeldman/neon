@@ -196,3 +196,84 @@ class TestPrice:
             for T in [0.25, 0.5, 1.0, 2.0]
         ]
         assert prices == sorted(prices)
+
+
+def _bs_price(**kw):
+    return make_greeks(
+        kw["underlying_price"],
+        kw["strike_price"],
+        kw["volatility"],
+        kw["risk_free_rate"],
+        kw["time_to_maturity"],
+        kw["option_type"],
+    ).price()
+
+
+def _make_ng(pricing_fn=_bs_price):
+    from neon.lib.greeks.numerical_greeks import NumericalGreeks
+
+    ng = NumericalGreeks(pricing_fn=pricing_fn)
+    ng.underlying_price = 100.0
+    ng.strike_price = 100.0
+    ng.volatility = 0.2
+    ng.risk_free_rate = 0.05
+    ng.time_to_maturity = 1.0
+    ng.option_type = OptionType.Call
+    return ng
+
+
+# ---------------------------------------------------------------------------
+# vanna()
+# ---------------------------------------------------------------------------
+
+
+class TestVanna:
+    def test_returns_float(self):
+        g = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        assert isinstance(g.vanna(), float)
+
+    def test_atm_call_known_value(self):
+        # ATM call: S=K=100, σ=0.2, r=0.05, T=1 → vanna ≈ -0.281
+        g = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        assert g.vanna() == pytest.approx(-0.281, abs=0.01)
+
+    def test_call_put_same_value(self):
+        call = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        put = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Put)
+        assert call.vanna() == pytest.approx(put.vanna(), abs=1e-10)
+
+    def test_matches_numerical(self):
+        ag = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        ng = _make_ng()
+        assert ag.vanna() == pytest.approx(ng.vanna(), abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# volga()
+# ---------------------------------------------------------------------------
+
+
+class TestVolga:
+    def test_returns_float(self):
+        g = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        assert isinstance(g.volga(), float)
+
+    def test_atm_call_known_value(self):
+        # ATM call: S=K=100, σ=0.2, r=0.05, T=1 → volga ≈ 9.85
+        g = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        assert g.volga() == pytest.approx(9.85, abs=0.1)
+
+    def test_always_positive(self):
+        for opt in [OptionType.Call, OptionType.Put]:
+            g = make_greeks(100, 100, 0.2, 0.05, 1.0, opt)
+            assert g.volga() > 0
+
+    def test_call_put_same_value(self):
+        call = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Call)
+        put = make_greeks(100, 100, 0.2, 0.05, 1.0, OptionType.Put)
+        assert call.volga() == pytest.approx(put.volga(), abs=1e-10)
+
+    def test_matches_numerical(self):
+        ag = make_greeks(100.0, 100.0, 0.2, 0.05, 1.0, OptionType.Call)
+        ng = _make_ng()
+        assert ag.volga() == pytest.approx(ng.volga(), abs=0.1)

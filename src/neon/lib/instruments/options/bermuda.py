@@ -1,6 +1,5 @@
 from neon.lib.instruments.options.base import BaseOption
 from neon.lib.instruments.options.option_inputs import OptionInputs
-from neon.lib.instruments.options.option_type import OptionType
 
 
 class BermudaOption(BaseOption):

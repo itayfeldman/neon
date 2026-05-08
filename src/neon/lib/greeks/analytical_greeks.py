@@ -64,3 +64,16 @@ class AnalyticalGreeks(Greeks):
             * np.exp(-self.risk_free_rate * self.time_to_maturity)
             * norm.cdf(self.option_type * self.d2)
         )
+
+    def vanna(self) -> float:
+        return float(-norm.pdf(self.d1) * self.d2 / self.volatility)
+
+    def volga(self) -> float:
+        return float(
+            self.underlying_price
+            * norm.pdf(self.d1)
+            * self.time_to_maturity**0.5
+            * self.d1
+            * self.d2
+            / self.volatility
+        )
