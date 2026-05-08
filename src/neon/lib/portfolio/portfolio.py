@@ -1,40 +1,15 @@
 from dataclasses import dataclass, field
 
+from neon.lib.portfolio.position import Position
+
 
 @dataclass
 class Portfolio:
     name: str
-    assets: dict = field(default_factory=dict)
+    positions: list[Position] = field(default_factory=list)
 
-    def add_asset(self, asset_name: str, quantity: float):
-        if asset_name in self.assets:
-            self.assets[asset_name] += quantity
-        else:
-            self.assets[asset_name] = quantity
+    def add_position(self, position: Position) -> None:
+        self.positions.append(position)
 
-    def remove_asset(self, asset_name: str, quantity: float):
-        if asset_name in self.assets:
-            if self.assets[asset_name] >= quantity:
-                self.assets[asset_name] -= quantity
-                if self.assets[asset_name] == 0:
-                    del self.assets[asset_name]
-            else:
-                raise ValueError(f"Not enough quantity of {asset_name} to remove.")
-        else:
-            raise ValueError(f"Asset {asset_name} not found in portfolio.")
-
-    def get_asset_quantity(self, asset_name: str) -> float:
-        return self.assets.get(asset_name, 0.0)
-
-    def get_total_assets(self) -> dict:
-        return self.assets.copy()
-
-
-# Example usage:
-if __name__ == "__main__":
-    portfolio = Portfolio("My Portfolio")
-    portfolio.add_asset("AAPL", 10)
-    portfolio.add_asset("GOOGL", 5)
-    print(portfolio.get_total_assets())  # Output: {'AAPL': 10, 'GOOGL': 5}
-    portfolio.remove_asset("AAPL", 5)
-    print(portfolio.get_asset_quantity("AAPL"))  # Output: 5
+    def value(self) -> float:
+        return float(sum(p.value() for p in self.positions))

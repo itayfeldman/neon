@@ -1,15 +1,12 @@
-from collections import namedtuple
+from dataclasses import dataclass
 
-Position = namedtuple(
-    "Position",
-    [
-        "account_id",
-        "asset_id",
-        "quantity",
-        "cost_basis",
-        "current_price",
-        "current_value",
-        "unrealized_gain_loss",
-        "unrealized_gain_loss_percent",
-    ],
-)
+from neon.lib.instruments.instrument import Instrument
+
+
+@dataclass(frozen=True)
+class Position:
+    instrument: Instrument
+    quantity: float  # positive = long, negative = short
+
+    def value(self) -> float:
+        return self.instrument.price() * self.quantity
