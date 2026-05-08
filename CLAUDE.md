@@ -26,16 +26,19 @@ This is a **quantitative finance / derivatives** project. The domain is options 
 | `core` | `lib/core/` | Enums and numeric constants |
 | `datetime` | `lib/datetime/` | Day count conventions and time-to-maturity calculations |
 | `greeks` | `lib/greeks/` | Base Greeks class; `AnalyticalGreeks` and `NumericalGreeks` subclasses |
+| `pricing` | `lib/pricing/` | `simulate_gbm`, `price_mc` — reusable Monte Carlo simulation |
 | `instruments` | `lib/instruments/` | `Instrument` ABC, `Cash`, and options hierarchy |
 | `portfolio` | `lib/portfolio/` | `Portfolio` and `Position` |
+| `risk` | `lib/risk/` | `RiskEngine` — portfolio-level Greeks aggregation |
+| `fixed_income` | `lib/fixed_income/` | Bond pricing, discount curve, analytics |
 
-Dependency flow is strictly downward: `instruments` → `greeks` → `datetime` → `core`.
+Dependency flow is strictly downward: `risk` → `portfolio` → `instruments` → `pricing` → `core`; `instruments` → `greeks` → `datetime` → `core`; `fixed_income` → `datetime` → `core`.
 
 ### Key modules
 
 - `lib/core/constants.py` — numeric constants: `N_SIM`, `ERR`, `VOL`, `VOL_MIN`, `TARGET_GAMMA`, `TARGET_VEGA`, `DATE_FORMAT`.
 - `lib/core/` — individual enum files: `currency.py` (`Currency` StrEnum), `month_code.py` (`MonthCode` IntEnum, F–Z), `position_direction.py` (`PositionDirection`), `time_steps.py` (`TimeSteps`).
-- `lib/datetime/day_count.py` — `DayCount` StrEnum (e.g. `ACT/360`, `ACT/365`, `30/360`).
+- `lib/datetime/day_count.py` — `DayCount` StrEnum: `ACT360`, `ACT365`, `THIRTY360`, `ACTACT_ISDA`.
 - `lib/instruments/options/option_inputs.py` — `OptionInputs` Pydantic model: the canonical input struct for all option types; holds underlying price, strike, vol, rate, dates, `OptionType`, `DayCount`, etc.
 - `lib/instruments/options/base.py` — `BaseOption` abstract class; computes `time_to_maturity` from `OptionInputs` on construction.
 - `lib/datetime/ttm.py` — `time_to_maturity()` dispatcher; three implementations for ACT/360, ACT/365, and 30/360 conventions.
@@ -50,4 +53,17 @@ Dependency flow is strictly downward: `instruments` → `greeks` → `datetime` 
 
 ### Status
 
-Most option pricing methods (`EuropeanOption`, `AmericanOption`, `AsianOption`, `BermudaOption`) and both Greeks subclasses raise `NotImplementedError`. The modules `cash_flow/`, `surface/`, `term_structure/`, and `api/` are empty placeholders for future work.
+- `AnalyticalGreeks` — full Black-Scholes pricing and all 7 Greeks (delta, gamma, vega, theta, rho, vanna, volga).
+- `AmericanOption` — CRR binomial tree with early exercise.
+- `VolatilitySurface` — bilinear interpolation via `scipy.interpolate.RegularGridInterpolator`.
+- `Position` — frozen dataclass; signed `quantity` encodes direction (positive = long, negative = short).
+- `RiskEngine` — aggregates portfolio Greeks as `Σ position.quantity × instrument.greeks.<greek>()`.
+- `EuropeanOption` — delegates pricing and Greeks to injected `Greeks` object; auto-wires `OptionInputs` on construction.
+- `AsianOption` — Monte Carlo arithmetic average price via `lib/pricing/monte_carlo.py`.
+- `BermudaOption` — CRR binomial tree with early exercise only at specified `exercise_dates`.
+- `lib/pricing/monte_carlo.py` — `simulate_gbm` (GBM path simulation) and `price_mc` (discounted mean payoff).
+- `lib/fixed_income/coupon_schedule.py` — `CouponSchedule`: backward generation of payment dates from maturity by coupon frequency.
+- `lib/fixed_income/bond.py` — `Bond`: dirty/clean price from YTM (fractional-period discounting), YTM from clean price (`brentq`), accrued interest, price from discount curve.
+- `lib/fixed_income/discount_curve.py` — `DiscountCurve`: log-linear interpolation; `df()`, `zero_rate()`, `forward_rate()`.
+- `lib/fixed_income/bond_analytics.py` — `BondAnalytics`: DV01, modified duration, Macaulay duration, convexity (all ±1bp bump-and-reprice).
+- `cash_flow/`, `term_structure/`, `api/` are unimplemented placeholders.
