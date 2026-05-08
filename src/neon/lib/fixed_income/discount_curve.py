@@ -19,6 +19,18 @@ class DiscountCurve:
         self._times = [self._years(d) for d in self._dates]
         self._log_dfs = [-r * t for r, t in zip(zero_rates, self._times)]
 
+    @property
+    def value_date(self) -> str:
+        return self._value_date.strftime(DATE_FORMAT)
+
+    @property
+    def dates(self) -> list[str]:
+        return [d.strftime(DATE_FORMAT) for d in self._dates]
+
+    @property
+    def zero_rates(self) -> list[float]:
+        return list(self._zero_rates)
+
     def _years(self, date: datetime) -> float:
         return (date - self._value_date).days / 365.0
 
