@@ -1,3 +1,5 @@
+import calendar
+
 import pandas as pd
 
 from .day_count import DayCount
@@ -26,10 +28,25 @@ def time_to_maturity_THIRTY360(
     return days / 360
 
 
+def time_to_maturity_ACTACT_ISDA(
+    start_date: pd.Timestamp, end_date: pd.Timestamp
+) -> float:
+    result = 0.0
+    current = start_date
+    while current < end_date:
+        year_end = pd.Timestamp(year=current.year + 1, month=1, day=1)
+        period_end = min(end_date, year_end)
+        days_in_year = 366 if calendar.isleap(current.year) else 365
+        result += (period_end - current).days / days_in_year
+        current = period_end
+    return result
+
+
 day_count_functions = {
     DayCount.ACT360: time_to_maturity_ACT360,
     DayCount.ACT365: time_to_maturity_ACT365,
     DayCount.THIRTY360: time_to_maturity_THIRTY360,
+    DayCount.ACTACT_ISDA: time_to_maturity_ACTACT_ISDA,
 }
 
 
