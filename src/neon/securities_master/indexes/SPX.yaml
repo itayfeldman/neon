@@ -1,0 +1,5 @@
+ticker: SPX
+name: S&P500
+exchange: CBOE
+multiplier: 1
+calendar: NYS

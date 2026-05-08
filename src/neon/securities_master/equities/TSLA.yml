@@ -1,0 +1,5 @@
+ticker: TSLA
+name: Tesla
+exchange: NASDAQ
+multiplier: 1
+calendar: NYS
