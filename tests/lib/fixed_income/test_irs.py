@@ -103,7 +103,7 @@ class TestDV01:
         curve_ext = DiscountCurve(VALUE_DATE, dates_ext, [RATE] * len(dates_ext))
         assert long_.dv01(VALUE_DATE, curve_ext) > short.dv01(VALUE_DATE, curve)
 
-    def test_raises_clear_error_for_curve_without_zero_rate_data(self):
+    def test_dv01_raises_type_error_for_incomplete_curve(self):
         class DfOnlyCurve:
             def df(self, _: str) -> float:
                 return 1.0
