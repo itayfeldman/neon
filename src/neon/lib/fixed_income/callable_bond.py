@@ -97,5 +97,15 @@ class CallableBond(Bond):
 
 def _offset_date(base: str, years: float, day_count: DayCount) -> str:
     """Return a DATE_FORMAT string approximately `years` years after base."""
-    dt = datetime.strptime(base, DATE_FORMAT) + timedelta(days=round(years * 365))
+    convention = getattr(day_count, "name", str(day_count)).upper()
+    if "360" in convention:
+        days_per_year = 360
+    elif "365" in convention:
+        days_per_year = 365
+    else:
+        days_per_year = 365
+
+    dt = datetime.strptime(base, DATE_FORMAT) + timedelta(
+        days=round(years * days_per_year)
+    )
     return dt.strftime(DATE_FORMAT)
