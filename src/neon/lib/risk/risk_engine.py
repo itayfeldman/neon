@@ -115,10 +115,7 @@ class RiskEngine:
             dv01 = p.quantity * analytics.dv01(settle_date, ytm + spread)
             mod_dur = analytics.modified_duration(settle_date, ytm + spread)
             conv = analytics.convexity(settle_date, ytm + spread)
-
-            p_up = bond.dirty_price_from_ytm(settle_date, ytm + spread + _BP)
-            p_dn = bond.dirty_price_from_ytm(settle_date, ytm + spread - _BP)
-            spread_dv01 = p.quantity * (p_dn - p_up) / 2
+            spread_dv01 = dv01
 
             total_dv01 += dv01
             total_spread_dv01 += spread_dv01

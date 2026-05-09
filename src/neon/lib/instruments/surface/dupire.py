@@ -11,6 +11,7 @@ class DupireLocalVol:
         self._surface = surface
         self._dK = dK
         self._dT = dT
+        self._min_strike = 1e-8
 
     def _w(self, K: float, T: float) -> float:
         """Total implied variance at (K, T) via SVISurface."""
@@ -45,15 +46,22 @@ class DupireLocalVol:
 
     def local_vol(self, K: float, T: float) -> float:
         dK, dT = self._dK, self._dT
+        K = max(K, self._min_strike)
 
         w = self._w(K, T)
-        w_Kup = self._w(K + dK, T)
-        w_Kdn = self._w(K - dK, T)
+        w_Kup = self._w(max(K + dK, self._min_strike), T)
+        k_dn = K - dK
+        if k_dn > self._min_strike:
+            w_Kdn = self._w(k_dn, T)
+            dw_dK = (w_Kup - w_Kdn) / (2 * dK)
+            d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
+        else:
+            w_Kdn = self._w(self._min_strike, T)
+            dw_dK = (w_Kup - w) / dK
+            d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
         w_Tup = self._w(K, T + dT)
 
         dw_dT = (w_Tup - w) / dT
-        dw_dK = (w_Kup - w_Kdn) / (2 * dK)
-        d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
 
         F = self._forward(T)
         y = math.log(K / F) if F > 0 else 0.0

@@ -53,3 +53,7 @@ class TestDupireLocalVol:
         lv_t1 = d.local_vol(100.0, 0.5)
         lv_t2 = d.local_vol(100.0, 1.5)
         assert lv_t1 != lv_t2
+
+    def test_local_vol_handles_low_strike(self):
+        lv = _dupire().local_vol(0.1, 1.0)
+        assert lv > 0

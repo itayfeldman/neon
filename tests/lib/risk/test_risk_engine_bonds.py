@@ -64,6 +64,7 @@ class TestBondRisk:
             _SETTLE, {b: _YTM}, spreads={b: 0.01}
         )
         assert result.spread_dv01 > 0
+        assert result.spread_dv01 == pytest.approx(result.dv01, rel=1e-6)
 
     def test_mixed_portfolio_skips_non_bonds(self):
         b = _bond()
