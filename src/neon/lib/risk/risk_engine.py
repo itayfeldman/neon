@@ -1,4 +1,18 @@
+from dataclasses import dataclass
+
+from neon.lib.fixed_income.bond import Bond
+from neon.lib.fixed_income.bond_analytics import BondAnalytics
 from neon.lib.portfolio.portfolio import Portfolio
+
+_BP = 0.0001
+
+
+@dataclass
+class BondRisk:
+    dv01: float
+    modified_duration: float
+    convexity: float
+    spread_dv01: float
 
 
 class RiskEngine:
@@ -59,4 +73,62 @@ class RiskEngine:
                 p.quantity * p.instrument.greeks.volga()
                 for p in self._portfolio.positions
             )
+        )
+
+    def bond_risk(
+        self,
+        settle_date: str,
+        ytms: dict[Bond, float],
+        spreads: dict[Bond, float] | None = None,
+    ) -> BondRisk:
+        if spreads is None:
+            spreads = {}
+
+        bond_positions = [
+            p for p in self._portfolio.positions
+            if isinstance(p.instrument, Bond)
+        ]
+
+        total_dv01 = 0.0
+        total_spread_dv01 = 0.0
+        total_dirty_value = 0.0
+        weighted_duration = 0.0
+        weighted_convexity = 0.0
+
+        for p in bond_positions:
+            bond = p.instrument
+            ytm = ytms[bond]
+            spread = spreads.get(bond, 0.0)
+            analytics = BondAnalytics(bond)
+
+            dirty = bond.dirty_price_from_ytm(settle_date, ytm + spread)
+            position_value = abs(p.quantity) * dirty
+
+            dv01 = p.quantity * analytics.dv01(settle_date, ytm + spread)
+            mod_dur = analytics.modified_duration(settle_date, ytm + spread)
+            conv = analytics.convexity(settle_date, ytm + spread)
+
+            p_up = bond.dirty_price_from_ytm(settle_date, ytm + spread + _BP)
+            p_dn = bond.dirty_price_from_ytm(settle_date, ytm + spread - _BP)
+            spread_dv01 = p.quantity * (p_dn - p_up) / 2
+
+            total_dv01 += dv01
+            total_spread_dv01 += spread_dv01
+            weighted_duration += mod_dur * position_value
+            weighted_convexity += conv * position_value
+            total_dirty_value += position_value
+
+        if total_dirty_value == 0.0:
+            return BondRisk(
+                dv01=0.0,
+                modified_duration=0.0,
+                convexity=0.0,
+                spread_dv01=0.0,
+            )
+
+        return BondRisk(
+            dv01=total_dv01,
+            modified_duration=weighted_duration / total_dirty_value,
+            convexity=weighted_convexity / total_dirty_value,
+            spread_dv01=total_spread_dv01,
         )
