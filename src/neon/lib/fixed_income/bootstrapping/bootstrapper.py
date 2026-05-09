@@ -23,6 +23,11 @@ class CurveBootstrapper:
 
         for instrument in sorted_instruments:
             date, df = instrument.discount_factor(curve)
+            if not math.isfinite(df) or df <= 0:
+                raise ValueError(
+                    f"Instrument {instrument!r} returned invalid discount factor "
+                    f"{df!r} for date {date!r}; expected a finite value greater than 0."
+                )
             t = self._years(date)
             zero_rate = -math.log(df) / t if t > 0 else 0.0
             dates.append(date)
