@@ -57,3 +57,9 @@ class TestDupireLocalVol:
     def test_local_vol_handles_low_strike(self):
         lv = _dupire().local_vol(0.1, 1.0)
         assert lv > 0
+
+    def test_local_vol_clamps_very_low_strike_to_floor(self):
+        d = _dupire()
+        lv_very_low = d.local_vol(1e-10, 1.0)
+        lv_floor = d.local_vol(1e-8, 1.0)
+        assert lv_very_low == pytest.approx(lv_floor, rel=1e-6)

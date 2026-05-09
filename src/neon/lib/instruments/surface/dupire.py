@@ -58,9 +58,9 @@ class DupireLocalVol:
             dw_dK = (w_Kup - w_Kdn) / (2 * dK)
             d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
         else:
-            w_Kdn = self._w(self._min_strike, T)
             dw_dK = (w_Kup - w) / dK
-            d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
+            w_K2up = self._w(max(K + 2 * dK, self._min_strike), T)
+            d2w_dK2 = (w_K2up - 2 * w_Kup + w) / (dK ** 2)
         w_Tup = self._w(K, T + dT)
 
         dw_dT = (w_Tup - w) / dT
