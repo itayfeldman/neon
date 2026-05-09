@@ -21,10 +21,25 @@ class DupireLocalVol:
     def _T_to_expiry(self, T: float) -> str:
         """Map time-to-expiry (years) to a DATE_FORMAT string for SVISurface lookup."""
         expiries = self._surface._expiries
-        base_str = expiries[0]
-        base_ord = _str_to_ordinal(base_str)
-        target_ord = base_ord + round(T * 365)
-        return date.fromordinal(target_ord).strftime(DATE_FORMAT)
+        times = [self._surface._times[e] for e in expiries]
+
+        if T <= times[0]:
+            return expiries[0]
+        if T >= times[-1]:
+            return expiries[-1]
+
+        for i, expiry in enumerate(expiries):
+            if times[i] == T:
+                return expiry
+
+        ordinals = [_str_to_ordinal(e) for e in expiries]
+        for i in range(len(times) - 1):
+            if times[i] <= T <= times[i + 1]:
+                alpha = (T - times[i]) / (times[i + 1] - times[i])
+                target_ord = round(ordinals[i] + alpha * (ordinals[i + 1] - ordinals[i]))
+                return date.fromordinal(target_ord).strftime(DATE_FORMAT)
+
+        return expiries[-1]
 
     def local_vol(self, K: float, T: float) -> float:
         dK, dT = self._dK, self._dT
