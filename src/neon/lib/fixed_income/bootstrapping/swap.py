@@ -1,6 +1,8 @@
 from neon.lib.datetime.day_count import DayCount
 from neon.lib.fixed_income.coupon_schedule import CouponSchedule
 
+_MIN_DF = 1e-10
+
 
 class Swap:
     def __init__(
@@ -26,10 +28,10 @@ class Swap:
         # Solve par condition: c * (annuity + df_T) + df_T = 1
         # => df_T * (c + 1) = 1 - c * annuity
         df_T = float((1 - c * annuity) / (1 + c))
-        if not (0.0 < df_T <= 1.0):
+        if not (_MIN_DF < df_T <= 1.0):
             raise ValueError(
                 "Invalid terminal discount factor "
                 f"{df_T} for swap maturity {self._maturity_date}; "
-                "expected 0 < df_T <= 1"
+                f"expected {_MIN_DF} < df_T <= 1"
             )
         return self._maturity_date, df_T

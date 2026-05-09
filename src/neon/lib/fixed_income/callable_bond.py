@@ -74,7 +74,7 @@ class CallableBond(Bond):
             node_offsets = (2 * np.arange(i + 1) - i) * sigma * np.sqrt(dt)
             r = fwd[i] + node_offsets
             discount = np.exp(-r * dt)
-            child_values = values
+            child_values = values.copy()
             # Risk-neutral probabilities (Ho-Lee: p = 0.5).
             # Coupon cash flow arrives at the child step.
             if step in coupon_steps:
