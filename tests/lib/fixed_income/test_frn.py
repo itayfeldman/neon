@@ -49,4 +49,6 @@ class TestFloatingRateNote:
 
     def test_par_when_coupon_equals_ytm(self):
         frn = _frn(reference_rate=0.04, spread=0.01)  # coupon_rate = 0.05
-        assert frn.clean_price_from_ytm(SETTLE, 0.05) == pytest.approx(100.0, abs=0.01)
+        assert frn.clean_price_from_ytm(SETTLE, 0.05) == pytest.approx(
+            100.0, abs=0.01
+        )
