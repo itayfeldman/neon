@@ -73,3 +73,11 @@ class TestCurveBootstrapper:
         instruments = [Deposit(VALUE_DATE, "20260101", rate=0.05)]
         curve = CurveBootstrapper(VALUE_DATE, instruments).build()
         assert curve.df(VALUE_DATE) == pytest.approx(1.0)
+
+    def test_raises_clear_error_on_invalid_discount_factor(self):
+        class BadInstrument:
+            def discount_factor(self, _curve) -> tuple[str, float]:
+                return "20260101", -0.1
+
+        with pytest.raises(ValueError, match="Invalid discount factor"):
+            CurveBootstrapper(VALUE_DATE, [BadInstrument()]).build()

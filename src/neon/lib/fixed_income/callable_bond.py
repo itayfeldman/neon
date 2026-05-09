@@ -42,7 +42,7 @@ class CallableBond(Bond):
         face = self._face
 
         # Forward rates from curve: θ(i) calibrates the tree to the curve
-        # r(i, j) = f(i*dt) + j * sigma * sqrt(dt)  (Ho-Lee)
+        # r(i, j) = f(i*dt) + (2j - i) * sigma * sqrt(dt)  (Ho-Lee)
         # where f(t) is the instantaneous forward rate at time t
         times = np.arange(1, n + 1) * dt
         # forward rate at each step midpoint from the curve
@@ -64,7 +64,7 @@ class CallableBond(Bond):
             if pd >= self._call_start:
                 call_steps.add(step)
 
-        # Terminal bond values at maturity (face only; coupons are added during backward induction)
+        # Terminal bond values at maturity (face only; coupons are added in recursion).
         n_nodes = n + 1
         values = np.full(n_nodes, face, dtype=float)
 
@@ -74,18 +74,16 @@ class CallableBond(Bond):
             node_offsets = (2 * np.arange(i + 1) - i) * sigma * np.sqrt(dt)
             r = fwd[i] + node_offsets
             discount = np.exp(-r * dt)
-            # Risk-neutral probabilities (Ho-Lee: p = 0.5)
-            cont = discount * 0.5 * (values[:i + 1] + values[1:i + 2])
-            # Add coupon cash flow arriving at child step
+            child_values = values
+            # Risk-neutral probabilities (Ho-Lee: p = 0.5).
+            # Coupon cash flow arrives at the child step.
             if step in coupon_steps:
-                cont += coupon * discount
-            # Issuer calls at par on callable steps; if the call occurs on a
-            # coupon payment date, the holder also receives that coupon.
-            # `cont` is a parent-node value, so the call payoff must be
-            # discounted one step to be compared consistently.
+                child_values = child_values + coupon
+            # Issuer calls at par on callable dates; with coupon this pays face+coupon.
             if step in call_steps:
                 call_payoff = face + (coupon if step in coupon_steps else 0.0)
-                cont = np.minimum(cont, call_payoff * discount)
+                child_values = np.minimum(child_values, call_payoff)
+            cont = discount * 0.5 * (child_values[:i + 1] + child_values[1:i + 2])
             values = cont
 
         return float(values[0])

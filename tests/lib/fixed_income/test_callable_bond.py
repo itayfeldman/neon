@@ -81,3 +81,20 @@ class TestCallableBond:
         price = cb.dirty_price_from_tree(SETTLE, curve)
         # Price should be pulled toward par (100) by call option
         assert price < 130  # without call at 15% coupon it would be far above par
+
+    def test_single_period_zero_rate_pays_face_plus_coupon_once(self):
+        class FlatZeroCurve:
+            def forward_rate(self, *_args) -> float:
+                return 0.0
+
+        cb = CallableBond(
+            issue_date="20250101",
+            maturity_date="20250701",
+            coupon_rate=0.10,
+            call_start="20250701",
+            vol=0.0,
+            coupon_freq=2,
+        )
+        assert cb.dirty_price_from_tree("20250101", FlatZeroCurve()) == pytest.approx(
+            105.0, abs=1e-6
+        )

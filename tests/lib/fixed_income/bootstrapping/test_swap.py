@@ -47,3 +47,8 @@ class TestSwap:
         # full annuity includes the maturity payment
         full_annuity = sum(curve.df(d) for d in coupon_dates) + df_T
         assert rate / 2 * full_annuity + df_T == pytest.approx(1.0, abs=1e-6)
+
+    def test_raises_on_invalid_terminal_discount_factor(self):
+        swap = Swap(VALUE_DATE, "20270101", fixed_rate=4.0)
+        with pytest.raises(ValueError, match="Invalid terminal discount factor"):
+            swap.discount_factor(_flat_curve())
