@@ -74,11 +74,11 @@ class CallableBond(Bond):
             node_offsets = (2 * np.arange(i + 1) - i) * sigma * np.sqrt(dt)
             r = fwd[i] + node_offsets
             discount = np.exp(-r * dt)
-            child_values = values.copy()
+            child_values = values
             # Risk-neutral probabilities (Ho-Lee: p = 0.5).
             # Coupon cash flow arrives at the child step.
             if step in coupon_steps:
-                child_values += coupon
+                child_values = child_values + coupon
             # Issuer calls at par on callable dates; with coupon this pays face+coupon.
             if step in call_steps:
                 call_payoff = face + (coupon if step in coupon_steps else 0.0)

@@ -1,6 +1,7 @@
 from neon.lib.datetime.day_count import DayCount
 from neon.lib.fixed_income.coupon_schedule import CouponSchedule
 
+# Guardrail for near-zero discount factors that are numerically unstable/unrealistic.
 _MIN_DF = 1e-10
 
 
