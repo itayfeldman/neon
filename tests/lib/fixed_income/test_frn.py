@@ -23,7 +23,7 @@ class TestFloatingRateNote:
 
     def test_coupon_rate_equals_reference_plus_spread(self):
         frn = _frn(reference_rate=0.04, spread=0.01)
-        assert frn._coupon_rate == pytest.approx(0.05)
+        assert frn.clean_price_from_ytm(SETTLE, 0.05) == pytest.approx(100.0, abs=0.01)
 
     def test_higher_spread_higher_price(self):
         low = _frn(reference_rate=0.04, spread=0.005)
