@@ -1,5 +1,6 @@
 from neon.lib.datetime.day_count import DayCount
 from neon.lib.fixed_income.coupon_schedule import CouponSchedule
+from neon.lib.fixed_income.discount_curve import DiscountCurve
 
 _BP = 0.0001
 
@@ -43,13 +44,20 @@ class InterestRateSwap:
             / annuity
         )
 
-    def dv01(self, settle_date: str, curve: object) -> float:
+    def dv01(self, settle_date: str, curve: DiscountCurve) -> float:
         pv_up = self._shifted_pv(settle_date, curve, +_BP)
         pv_dn = self._shifted_pv(settle_date, curve, -_BP)
         return float((pv_dn - pv_up) / 2)
 
-    def _shifted_pv(self, settle_date: str, curve: object, shift: float) -> float:
-        from neon.lib.fixed_income.discount_curve import DiscountCurve
+    def _shifted_pv(
+        self, settle_date: str, curve: DiscountCurve, shift: float
+    ) -> float:
+        if not all(
+            hasattr(curve, attr) for attr in ("value_date", "dates", "zero_rates")
+        ):
+            raise TypeError(
+                "curve must provide value_date, dates, and zero_rates for dv01"
+            )
         shifted = DiscountCurve(
             curve.value_date,
             curve.dates,

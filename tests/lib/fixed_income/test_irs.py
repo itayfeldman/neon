@@ -102,3 +102,14 @@ class TestDV01:
         ]
         curve_ext = DiscountCurve(VALUE_DATE, dates_ext, [RATE] * len(dates_ext))
         assert long_.dv01(VALUE_DATE, curve_ext) > short.dv01(VALUE_DATE, curve)
+
+    def test_raises_clear_error_for_curve_without_zero_rate_data(self):
+        class DfOnlyCurve:
+            def df(self, _: str) -> float:
+                return 1.0
+
+        with pytest.raises(
+            TypeError,
+            match="curve must provide value_date, dates, and zero_rates for dv01",
+        ):
+            _swap().dv01(VALUE_DATE, DfOnlyCurve())  # type: ignore[arg-type]
