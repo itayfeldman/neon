@@ -20,12 +20,12 @@ class TestZeroCouponBond:
     def test_no_accrued_interest(self):
         assert _zcb().accrued_interest(SETTLE) == pytest.approx(0.0)
 
-    def test_dirty_price_equals_pv_of_face(self):
+    def test_dirty_price_is_between_zero_and_face(self):
         ytm = 0.05
         zcb = _zcb()
         price = zcb.dirty_price_from_ytm(SETTLE, ytm)
-        # Single cash flow at maturity: face / (1 + ytm)^years
-        # Bond uses coupon-period discounting; verify price < face
+        # For a positive yield on a zero-coupon bond priced at issuance,
+        # the discounted redemption value should be positive and below face.
         assert 0 < price < FACE
 
     def test_price_increases_as_ytm_falls(self):
