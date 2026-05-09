@@ -4,8 +4,6 @@ from neon.lib.fixed_income.bond import Bond
 from neon.lib.fixed_income.bond_analytics import BondAnalytics
 from neon.lib.portfolio.portfolio import Portfolio
 
-_BP = 0.0001
-
 
 @dataclass
 class BondRisk:
