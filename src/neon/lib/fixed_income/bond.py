@@ -38,6 +38,13 @@ class Bond:
             cashflows[-1] = (last_date, coupon + self._face)
         return cashflows
 
+    @property
+    def face(self) -> float:
+        return self._face
+
+    def future_cashflows(self, settle_date: str) -> list[tuple[str, float]]:
+        return self._future_cashflows(settle_date)
+
     def _last_coupon_date(self, settle_date: str) -> str | None:
         past = [d for d in self._schedule.payment_dates if d <= settle_date]
         return past[-1] if past else None

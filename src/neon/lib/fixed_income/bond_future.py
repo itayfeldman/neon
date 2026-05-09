@@ -20,17 +20,9 @@ class BondFuture:
         self._notional_yield = notional_yield
         self._day_count = day_count
 
-    def _bond_face(self, bond: Bond) -> float:
-        for attr in ("face", "notional"):
-            value = getattr(bond, attr, None)
-            if value is None:
-                continue
-            return float(value() if callable(value) else value)
-        return float(getattr(bond, "_face"))
-
     def conversion_factor(self, bond: Bond, settle_date: str) -> float:
         clean = bond.clean_price_from_ytm(settle_date, self._notional_yield)
-        return float(clean / self._bond_face(bond))
+        return float(clean / bond.face)
 
     def theoretical_price(
         self, bond: Bond, settle_date: str, clean_price: float
@@ -39,12 +31,12 @@ class BondFuture:
         accrued = bond.accrued_interest(settle_date)
         carry = (clean_price + accrued) * (1 + self._repo_rate * T)
 
-        # Subtract future value of coupons paid between settle and delivery
+        # Subtract future value of cashflows paid between settle and delivery
         coupon_fv = sum(
-            bond._coupon() * (1 + self._repo_rate * time_to_maturity(
+            cf * (1 + self._repo_rate * time_to_maturity(
                 d, self._delivery_date, self._day_count
             ))
-            for d in bond._schedule.payment_dates
+            for d, cf in bond.future_cashflows(settle_date)
             if settle_date < d <= self._delivery_date
         )
 

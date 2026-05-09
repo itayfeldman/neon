@@ -57,6 +57,8 @@ class SVICalibrator:
             return float(np.sum((fitted - market_arr) ** 2))
 
         result = minimize(objective, x0, method="L-BFGS-B", bounds=bounds)
+        if not result.success:
+            raise ValueError(f"SVI calibration failed: {result.message}")
         return SVISlice(*result.x)
 
 
@@ -85,15 +87,17 @@ class SVISurface:
     def calibrate(
         cls,
         market_data: dict[str, tuple[list[float], list[float]]],
-        forwards: dict[str, float] | None = None,
-        times: dict[str, float] | None = None,
+        forwards: dict[str, float],
+        times: dict[str, float],
     ) -> "SVISurface":
         slices: dict[str, SVISlice] = {}
         fwds: dict[str, float] = {}
         ts: dict[str, float] = {}
         for expiry, (strikes, vols) in market_data.items():
-            F = forwards[expiry] if forwards else 100.0
-            T = times[expiry] if times else 1.0
+            if expiry not in forwards or expiry not in times:
+                raise ValueError(f"Missing forward/time for expiry '{expiry}'")
+            F = forwards[expiry]
+            T = times[expiry]
             slices[expiry] = SVICalibrator.fit(strikes, F, T, vols)
             fwds[expiry] = F
             ts[expiry] = T

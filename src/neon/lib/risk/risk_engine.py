@@ -88,6 +88,14 @@ class RiskEngine:
             p for p in self._portfolio.positions
             if isinstance(p.instrument, Bond)
         ]
+        missing_ytms = [
+            p.instrument for p in bond_positions
+            if p.instrument not in ytms
+        ]
+        if missing_ytms:
+            raise ValueError(
+                f"Missing YTM entries for {len(missing_ytms)} bond(s) in portfolio"
+            )
 
         total_dv01 = 0.0
         total_spread_dv01 = 0.0

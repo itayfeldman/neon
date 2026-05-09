@@ -66,6 +66,19 @@ class TestSVICalibrator:
         for k, mv in zip(strikes, market_vols):
             assert fitted.implied_vol(k, _F, _T) == pytest.approx(mv, abs=2e-3)
 
+    def test_raises_if_optimizer_fails(self, monkeypatch: pytest.MonkeyPatch):
+        class _Result:
+            success = False
+            message = "failed"
+            x = [0.0, 0.1, -0.3, 0.0, 0.2]
+
+        monkeypatch.setattr(
+            "neon.lib.instruments.surface.svi.minimize",
+            lambda *args, **kwargs: _Result(),
+        )
+        with pytest.raises(ValueError, match="SVI calibration failed"):
+            SVICalibrator.fit([90.0, 100.0, 110.0], _F, _T, [0.2, 0.2, 0.2])
+
 
 class TestSVISurface:
     def test_get_vol_returns_float(self):
@@ -75,7 +88,11 @@ class TestSVISurface:
             exp: (strikes, [_slice().implied_vol(k, F, T) for k in strikes])
             for exp, (F, T) in expiries.items()
         }
-        surface = SVISurface.calibrate(market_data)
+        surface = SVISurface.calibrate(
+            market_data,
+            forwards={exp: F for exp, (F, _) in expiries.items()},
+            times={exp: T for exp, (_, T) in expiries.items()},
+        )
         assert isinstance(surface.get_vol(100.0, "20260101"), float)
 
     def test_get_vol_positive(self):
@@ -85,7 +102,11 @@ class TestSVISurface:
             exp: (strikes, [_slice().implied_vol(k, _F, _T) for k in strikes])
             for exp in expiries
         }
-        surface = SVISurface.calibrate(market_data)
+        surface = SVISurface.calibrate(
+            market_data,
+            forwards={exp: _F for exp in expiries},
+            times={exp: _T for exp in expiries},
+        )
         assert surface.get_vol(100.0, "20260101") > 0
 
     def test_interpolates_between_expiries(self):
@@ -94,9 +115,25 @@ class TestSVISurface:
             "20260101": (strikes, [_slice().implied_vol(k, _F, 1.0) for k in strikes]),
             "20280101": (strikes, [_slice().implied_vol(k, _F, 3.0) for k in strikes]),
         }
-        surface = SVISurface.calibrate(market_data)
+        surface = SVISurface.calibrate(
+            market_data,
+            forwards={"20260101": _F, "20280101": _F},
+            times={"20260101": 1.0, "20280101": 3.0},
+        )
         # Vol at intermediate expiry should be between the two slice vols
         v1 = surface.get_vol(100.0, "20260101")
         v2 = surface.get_vol(100.0, "20280101")
         v_mid = surface.get_vol(100.0, "20270101")
         assert min(v1, v2) - 0.01 <= v_mid <= max(v1, v2) + 0.01
+
+    def test_raises_when_forward_or_time_missing(self):
+        strikes = [90.0, 100.0, 110.0]
+        market_data = {
+            "20260101": (strikes, [_slice().implied_vol(k, _F, _T) for k in strikes]),
+        }
+        with pytest.raises(ValueError, match="Missing forward/time"):
+            SVISurface.calibrate(
+                market_data,
+                forwards={},
+                times={},
+            )

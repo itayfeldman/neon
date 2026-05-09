@@ -75,3 +75,8 @@ class TestBondRisk:
         result = engine.bond_risk(_SETTLE, {b: _YTM})
         assert isinstance(result.dv01, float)
         assert result.dv01 > 0
+
+    def test_missing_ytm_raises_clear_error(self):
+        b = _bond()
+        with pytest.raises(ValueError, match="Missing YTM entries"):
+            _engine(b).bond_risk(_SETTLE, {})
