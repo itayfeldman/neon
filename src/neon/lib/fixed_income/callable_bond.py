@@ -78,9 +78,13 @@ class CallableBond(Bond):
             # Add coupon cash flow arriving at child step
             if step in coupon_steps:
                 cont += coupon * discount
-            # Issuer calls at par if bond value > face
+            # Issuer calls at par on callable steps; if the call occurs on a
+            # coupon payment date, the holder also receives that coupon.
+            # `cont` is a parent-node value, so the call payoff must be
+            # discounted one step to be compared consistently.
             if step in call_steps:
-                cont = np.minimum(cont, face)
+                call_payoff = face + (coupon if step in coupon_steps else 0.0)
+                cont = np.minimum(cont, call_payoff * discount)
             values = cont
 
         return float(values[0])
