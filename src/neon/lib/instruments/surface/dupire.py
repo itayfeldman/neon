@@ -1,0 +1,78 @@
+import math
+from datetime import date, datetime
+
+from neon.lib.core.constants import DATE_FORMAT
+
+
+class DupireLocalVol:
+    """Dupire local vol surface derived numerically from an SVISurface."""
+
+    def __init__(self, surface: object, dK: float = 0.5, dT: float = 0.005) -> None:
+        self._surface = surface
+        self._dK = dK
+        self._dT = dT
+
+    def _w(self, K: float, T: float) -> float:
+        """Total implied variance at (K, T) via SVISurface."""
+        expiry = self._T_to_expiry(T)
+        iv = self._surface.get_vol(K, expiry)
+        return iv * iv * T
+
+    def _T_to_expiry(self, T: float) -> str:
+        """Map time-to-expiry (years) to a DATE_FORMAT string for SVISurface lookup."""
+        expiries = self._surface._expiries
+        base_str = expiries[0]
+        base_ord = _str_to_ordinal(base_str)
+        target_ord = base_ord + round(T * 365)
+        return date.fromordinal(target_ord).strftime(DATE_FORMAT)
+
+    def local_vol(self, K: float, T: float) -> float:
+        dK, dT = self._dK, self._dT
+
+        w = self._w(K, T)
+        w_Kup = self._w(K + dK, T)
+        w_Kdn = self._w(K - dK, T)
+        w_Tup = self._w(K, T + dT)
+
+        dw_dT = (w_Tup - w) / dT
+        dw_dK = (w_Kup - w_Kdn) / (2 * dK)
+        d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
+
+        F = self._forward(T)
+        y = math.log(K / F) if F > 0 else 0.0
+
+        if w <= 0 or dw_dT <= 0:
+            return float(self._surface.get_vol(K, self._T_to_expiry(T)))
+
+        denom = (
+            1.0
+            - (y / w) * dw_dK
+            + 0.25 * (-0.25 - 1.0 / w + y ** 2 / w ** 2) * dw_dK ** 2
+            + 0.5 * d2w_dK2
+        )
+        if denom <= 0:
+            return float(self._surface.get_vol(K, self._T_to_expiry(T)))
+
+        loc_var = dw_dT / denom
+        return float(math.sqrt(max(loc_var, 1e-8)))
+
+    def _forward(self, T: float) -> float:
+        expiry = self._T_to_expiry(T)
+        expiries = self._surface._expiries
+        if expiry in self._surface._forwards:
+            return self._surface._forwards[expiry]
+        times = [self._surface._times[e] for e in expiries]
+        fwds = [self._surface._forwards[e] for e in expiries]
+        if T <= times[0]:
+            return fwds[0]
+        if T >= times[-1]:
+            return fwds[-1]
+        for i in range(len(times) - 1):
+            if times[i] <= T <= times[i + 1]:
+                alpha = (T - times[i]) / (times[i + 1] - times[i])
+                return fwds[i] + alpha * (fwds[i + 1] - fwds[i])
+        return fwds[-1]
+
+
+def _str_to_ordinal(date_str: str) -> int:
+    return datetime.strptime(date_str, DATE_FORMAT).toordinal()
