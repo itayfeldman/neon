@@ -42,6 +42,10 @@ class Bond:
     def face(self) -> float:
         return self._face
 
+    @property
+    def coupon_rate(self) -> float:
+        return self._coupon_rate
+
     def future_cashflows(self, settle_date: str) -> list[tuple[str, float]]:
         return self._future_cashflows(settle_date)
 
