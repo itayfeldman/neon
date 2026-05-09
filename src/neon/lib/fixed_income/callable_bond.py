@@ -71,7 +71,8 @@ class CallableBond(Bond):
         # Backward induction
         for i in range(n - 1, -1, -1):
             step = i + 1  # step index of the child nodes we just computed
-            r = fwd[i] + np.arange(i + 1) * sigma * np.sqrt(dt)
+            node_offsets = (2 * np.arange(i + 1) - i) * sigma * np.sqrt(dt)
+            r = fwd[i] + node_offsets
             discount = np.exp(-r * dt)
             # Risk-neutral probabilities (Ho-Lee: p = 0.5)
             cont = discount * 0.5 * (values[:i + 1] + values[1:i + 2])
