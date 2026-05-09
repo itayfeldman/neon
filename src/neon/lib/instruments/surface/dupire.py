@@ -48,28 +48,28 @@ class DupireLocalVol:
 
     def local_vol(self, K: float, T: float) -> float:
         dK, dT = self._dK, self._dT
-        K = max(K, self._min_strike)
+        K_clamped = max(K, self._min_strike)
 
-        w = self._w(K, T)
-        w_Kup = self._w(max(K + dK, self._min_strike), T)
-        K_dn = K - dK
+        w = self._w(K_clamped, T)
+        w_Kup = self._w(K_clamped + dK, T)
+        K_dn = K_clamped - dK
         if K_dn > self._min_strike:
             w_Kdn = self._w(K_dn, T)
             dw_dK = (w_Kup - w_Kdn) / (2 * dK)
             d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
         else:
             dw_dK = (w_Kup - w) / dK
-            w_K2up = self._w(max(K + 2 * dK, self._min_strike), T)
+            w_K2up = self._w(K_clamped + 2 * dK, T)
             d2w_dK2 = (w_K2up - 2 * w_Kup + w) / (dK ** 2)
-        w_Tup = self._w(K, T + dT)
+        w_Tup = self._w(K_clamped, T + dT)
 
         dw_dT = (w_Tup - w) / dT
 
         F = self._forward(T)
-        y = math.log(K / F) if F > 0 else 0.0
+        y = math.log(K_clamped / F) if F > 0 else 0.0
 
         if w <= 0 or dw_dT <= 0:
-            return float(self._surface.get_vol(K, self._T_to_expiry(T)))
+            return float(self._surface.get_vol(K_clamped, self._T_to_expiry(T)))
 
         denom = (
             1.0
@@ -78,7 +78,7 @@ class DupireLocalVol:
             + 0.5 * d2w_dK2
         )
         if denom <= 0:
-            return float(self._surface.get_vol(K, self._T_to_expiry(T)))
+            return float(self._surface.get_vol(K_clamped, self._T_to_expiry(T)))
 
         loc_var = dw_dT / denom
         return float(math.sqrt(max(loc_var, 1e-8)))
