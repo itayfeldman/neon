@@ -13,6 +13,8 @@ class FloatingRateNote(Bond):
         day_count: DayCount = DayCount.ACT365,
         face: float = 100.0,
     ) -> None:
+        self._reference_rate = reference_rate
+        self._spread = spread
         super().__init__(
             issue_date=issue_date,
             maturity_date=maturity_date,
@@ -21,3 +23,11 @@ class FloatingRateNote(Bond):
             day_count=day_count,
             face=face,
         )
+
+    @property
+    def reference_rate(self) -> float:
+        return self._reference_rate
+
+    @property
+    def spread(self) -> float:
+        return self._spread

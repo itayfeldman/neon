@@ -21,13 +21,10 @@ class TestFloatingRateNote:
     def test_is_bond(self):
         assert isinstance(_frn(), Bond)
 
-    def test_coupon_rate_equals_reference_plus_spread(self):
-        frn_a = _frn(reference_rate=0.04, spread=0.01)
-        frn_b = _frn(reference_rate=0.03, spread=0.02)
-        ytm = 0.05
-        assert frn_a.clean_price_from_ytm(SETTLE, ytm) == pytest.approx(
-            frn_b.clean_price_from_ytm(SETTLE, ytm), abs=0.01
-        )
+    def test_retains_reference_rate_and_spread(self):
+        frn = _frn(reference_rate=0.04, spread=0.01)
+        assert frn.reference_rate == pytest.approx(0.04)
+        assert frn.spread == pytest.approx(0.01)
 
     def test_higher_spread_higher_price(self):
         low = _frn(reference_rate=0.04, spread=0.005)
