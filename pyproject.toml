@@ -26,6 +26,10 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
 ]
+notebooks = [
+    "jupyter>=1.0",
+    "matplotlib>=3.9",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
