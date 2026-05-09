@@ -72,6 +72,15 @@ class SVISurface:
         self._times = times
         self._expiries = sorted(slices.keys())
 
+    def expiries(self) -> tuple[str, ...]:
+        return tuple(self._expiries)
+
+    def forward(self, expiry: str) -> float:
+        return self._forwards[expiry]
+
+    def time(self, expiry: str) -> float:
+        return self._times[expiry]
+
     @classmethod
     def calibrate(
         cls,

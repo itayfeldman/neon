@@ -20,8 +20,8 @@ class DupireLocalVol:
 
     def _T_to_expiry(self, T: float) -> str:
         """Map time-to-expiry (years) to a DATE_FORMAT string for SVISurface lookup."""
-        expiries = self._surface._expiries
-        times = [self._surface._times[e] for e in expiries]
+        expiries = self._surface.expiries()
+        times = [self._surface.time(e) for e in expiries]
 
         if T <= times[0]:
             return expiries[0]
@@ -36,7 +36,9 @@ class DupireLocalVol:
         for i in range(len(times) - 1):
             if times[i] <= T <= times[i + 1]:
                 alpha = (T - times[i]) / (times[i + 1] - times[i])
-                target_ord = round(ordinals[i] + alpha * (ordinals[i + 1] - ordinals[i]))
+                target_ord = round(
+                    ordinals[i] + alpha * (ordinals[i + 1] - ordinals[i])
+                )
                 return date.fromordinal(target_ord).strftime(DATE_FORMAT)
 
         return expiries[-1]
@@ -73,11 +75,11 @@ class DupireLocalVol:
 
     def _forward(self, T: float) -> float:
         expiry = self._T_to_expiry(T)
-        expiries = self._surface._expiries
-        if expiry in self._surface._forwards:
-            return self._surface._forwards[expiry]
-        times = [self._surface._times[e] for e in expiries]
-        fwds = [self._surface._forwards[e] for e in expiries]
+        expiries = self._surface.expiries()
+        if expiry in expiries:
+            return self._surface.forward(expiry)
+        times = [self._surface.time(e) for e in expiries]
+        fwds = [self._surface.forward(e) for e in expiries]
         if T <= times[0]:
             return fwds[0]
         if T >= times[-1]:
