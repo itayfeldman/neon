@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from neon.lib.core.constants import DATE_FORMAT
 
-_MIN_STRIKE_FLOOR = 1e-8
+_STRIKE_FLOOR = 1e-8
 
 
 class DupireLocalVol:
@@ -13,7 +13,7 @@ class DupireLocalVol:
         self._surface = surface
         self._dK = dK
         self._dT = dT
-        self._min_strike = _MIN_STRIKE_FLOOR
+        self._min_strike = _STRIKE_FLOOR
 
     def _w(self, K: float, T: float) -> float:
         """Total implied variance at (K, T) via SVISurface."""
@@ -53,7 +53,7 @@ class DupireLocalVol:
         w = self._w(K_clamped, T)
         w_Kup = self._w(K_clamped + dK, T)
         K_dn = K_clamped - dK
-        if K_dn > self._min_strike:
+        if K_dn >= self._min_strike:
             w_Kdn = self._w(K_dn, T)
             dw_dK = (w_Kup - w_Kdn) / (2 * dK)
             d2w_dK2 = (w_Kup - 2 * w + w_Kdn) / (dK ** 2)
