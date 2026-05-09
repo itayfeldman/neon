@@ -42,6 +42,20 @@ class TestSVISlice:
             w = sl.a + sl.b * (sl.rho * (lm - sl.m) + inner)
             assert w >= 0
 
+    @pytest.mark.parametrize(
+        ("k", "forward"), [(0.0, _F), (-1.0, _F), (100.0, 0.0), (100.0, -1.0)]
+    )
+    def test_total_variance_raises_for_non_positive_strike_or_forward(
+        self, k: float, forward: float
+    ):
+        with pytest.raises(ValueError, match="must be positive"):
+            _slice().total_variance(k, forward)
+
+    @pytest.mark.parametrize("T", [0.0, -1.0])
+    def test_implied_vol_raises_for_non_positive_time(self, T: float):
+        with pytest.raises(ValueError, match="time to expiry T must be positive"):
+            _slice().implied_vol(100.0, _F, T)
+
 
 class TestSVICalibrator:
     def test_returns_svi_slice(self):

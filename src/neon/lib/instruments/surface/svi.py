@@ -21,12 +21,18 @@ class SVISlice:
     sigma: float
 
     def total_variance(self, k: float, forward: float) -> float:
+        if k <= 0:
+            raise ValueError("strike must be positive")
+        if forward <= 0:
+            raise ValueError("forward must be positive")
         lm = math.log(k / forward)
         return self.a + self.b * (
             self.rho * (lm - self.m) + math.sqrt((lm - self.m) ** 2 + self.sigma ** 2)
         )
 
     def implied_vol(self, k: float, forward: float, T: float) -> float:
+        if T <= 0:
+            raise ValueError("time to expiry T must be positive")
         return float(math.sqrt(max(self.total_variance(k, forward), 0.0) / T))
 
 

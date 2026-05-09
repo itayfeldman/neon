@@ -28,6 +28,12 @@ class LocalVolOption:
         self._K = strike
         self._r = risk_free_rate
         self._T = _years_between(current_date, expiry_date)
+        if self._T <= 0:
+            raise ValueError("expiry_date must be after current_date")
+        if n_spots <= 0:
+            raise ValueError("n_spots must be positive")
+        if n_steps <= 0:
+            raise ValueError("n_steps must be positive")
         self._option_type = option_type
         self._local_vol = local_vol
         self._n_spots = n_spots

@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from neon.lib.instruments.options.local_vol_option import LocalVolOption
 from neon.lib.instruments.options.option_type import OptionType
 from neon.lib.instruments.surface.dupire import DupireLocalVol
@@ -105,3 +107,32 @@ class TestLocalVolOption:
         # ATM call with ~20% vol and T=1 should be roughly 7–10% of spot
         p = _call().price()
         assert 1.0 < p < 25.0
+
+    def test_raises_for_non_positive_time_to_expiry(self):
+        with pytest.raises(ValueError, match="expiry_date must be after current_date"):
+            LocalVolOption(
+                underlying_price=_F,
+                strike=100.0,
+                risk_free_rate=0.03,
+                current_date=_SETTLE,
+                expiry_date=_SETTLE,
+                option_type=OptionType.Call,
+                local_vol=_local_vol(),
+            )
+
+    @pytest.mark.parametrize(
+        ("n_spots", "n_steps"), [(0, 100), (100, 0), (-1, 10), (10, -1)]
+    )
+    def test_raises_for_non_positive_grid_sizes(self, n_spots: int, n_steps: int):
+        with pytest.raises(ValueError, match="must be positive"):
+            LocalVolOption(
+                underlying_price=_F,
+                strike=100.0,
+                risk_free_rate=0.03,
+                current_date=_SETTLE,
+                expiry_date=_EXP1,
+                option_type=OptionType.Call,
+                local_vol=_local_vol(),
+                n_spots=n_spots,
+                n_steps=n_steps,
+            )
