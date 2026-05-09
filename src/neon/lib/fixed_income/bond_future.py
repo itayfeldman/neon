@@ -20,9 +20,17 @@ class BondFuture:
         self._notional_yield = notional_yield
         self._day_count = day_count
 
+    def _bond_face(self, bond: Bond) -> float:
+        for attr in ("face", "notional"):
+            value = getattr(bond, attr, None)
+            if value is None:
+                continue
+            return float(value() if callable(value) else value)
+        return float(getattr(bond, "_face"))
+
     def conversion_factor(self, bond: Bond, settle_date: str) -> float:
         clean = bond.clean_price_from_ytm(settle_date, self._notional_yield)
-        return float(clean / bond._face)
+        return float(clean / self._bond_face(bond))
 
     def theoretical_price(
         self, bond: Bond, settle_date: str, clean_price: float
