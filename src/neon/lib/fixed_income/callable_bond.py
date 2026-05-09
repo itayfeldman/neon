@@ -78,7 +78,7 @@ class CallableBond(Bond):
             # Risk-neutral probabilities (Ho-Lee: p = 0.5).
             # Coupon cash flow arrives at the child step.
             if step in coupon_steps:
-                child_values = child_values + coupon
+                child_values += coupon
             # Issuer calls at par on callable dates; with coupon this pays face+coupon.
             if step in call_steps:
                 call_payoff = face + (coupon if step in coupon_steps else 0.0)
