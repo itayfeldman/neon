@@ -64,12 +64,9 @@ class CallableBond(Bond):
             if pd >= self._call_start:
                 call_steps.add(step)
 
-        # Terminal bond values at maturity (face only — coupon added at terminal step)
+        # Terminal bond values at maturity (face only; coupons are added during backward induction)
         n_nodes = n + 1
         values = np.full(n_nodes, face, dtype=float)
-        # add terminal coupon if maturity is a coupon date
-        if n in coupon_steps:
-            values += coupon
 
         # Backward induction
         for i in range(n - 1, -1, -1):
