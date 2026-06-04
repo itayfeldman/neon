@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Validate branch name
         run: |
-          branch="${GITHUB_REF#refs/heads/}"
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
           if echo "$branch" | grep -qE '^(pr\/[0-9]+-(feat|fix|docs|test|refactor|chore|style|cleanup)(-[a-z0-9]+)*|feature\/[a-z0-9]+(-[a-z0-9]+)*)$'; then
             echo "Branch '$branch' is valid."
           else
