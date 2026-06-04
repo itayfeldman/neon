@@ -1,0 +1,51 @@
+name: Branch Naming
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        run: |
+          branch="${GITHUB_REF#refs/heads/}"
+          if echo "$branch" | grep -qE '^(pr\/[0-9]+-(feat|fix|docs|test|refactor|chore|style|cleanup)(-[a-z0-9]+)*|feature\/[a-z0-9]+(-[a-z0-9]+)*)$'; then
+            echo "Branch '$branch' is valid."
+          else
+            echo "ERROR: '$branch' does not match the required naming convention."
+            echo ""
+            echo "Allowed patterns:"
+            echo "  pr/<number>-<type>-<kebab-slug>   e.g. pr/16-feat-local-vol-cleanup"
+            echo "  feature/<kebab-slug>               e.g. feature/quant-analytics-suite"
+            echo ""
+            echo "Valid types: feat, fix, docs, test, refactor, chore, style, cleanup"
+            exit 1
+          fi
+
+  check-pr-title:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Validate PR title matches branch slug
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          slug=$(echo "$BRANCH" | grep -oP '^pr\/[0-9]+-\K.+' || true)
+          if [ -z "$slug" ]; then
+            echo "Skipping title check for non-pr/ branch '$BRANCH'."
+            exit 0
+          fi
+          if [ "$PR_TITLE" != "$slug" ]; then
+            echo "ERROR: PR title must exactly match the branch slug."
+            echo "  Branch:    $BRANCH"
+            echo "  Expected:  $slug"
+            echo "  Got:       $PR_TITLE"
+            exit 1
+          fi
+          echo "PR title '$PR_TITLE' matches branch slug."
