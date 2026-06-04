@@ -1,0 +1,5 @@
+ticker: UST2
+name: US Treasury 2 Year Note
+exchange: CBOT
+multiplier: 1000
+calendar: CBOT

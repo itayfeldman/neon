@@ -22,7 +22,7 @@ class VolatilitySurface:
             np.array(vols, dtype=float),
             method="linear",
             bounds_error=False,
-            fill_value=None,
+            fill_value=0.0,
         )
 
     def get_vol(self, strike: float, expiry: str) -> float:

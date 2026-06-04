@@ -31,6 +31,7 @@ This is a **quantitative finance / derivatives** project. The domain is options 
 | `portfolio` | `lib/portfolio/` | `Portfolio` and `Position` |
 | `risk` | `lib/risk/` | `RiskEngine` — portfolio-level Greeks aggregation |
 | `fixed_income` | `lib/fixed_income/` | Bond pricing, discount curve, analytics |
+| `bootstrapping` | `lib/fixed_income/bootstrapping/` | Yield curve bootstrapping from deposits, FRAs, and swaps |
 
 Dependency flow is strictly downward: `risk` → `portfolio` → `instruments` → `pricing` → `core`; `instruments` → `greeks` → `datetime` → `core`; `fixed_income` → `datetime` → `core`.
 
@@ -56,6 +57,7 @@ Dependency flow is strictly downward: `risk` → `portfolio` → `instruments` �
 - `AnalyticalGreeks` — full Black-Scholes pricing and all 7 Greeks (delta, gamma, vega, theta, rho, vanna, volga).
 - `AmericanOption` — CRR binomial tree with early exercise.
 - `VolatilitySurface` — bilinear interpolation via `scipy.interpolate.RegularGridInterpolator`.
+- `lib/instruments/surface/svi.py` — `SVISlice` (5-param SVI model), `SVICalibrator` (L-BFGS-B fit to market vols), `SVISurface` (per-expiry calibrated slices with total-variance interpolation).
 - `Position` — frozen dataclass; signed `quantity` encodes direction (positive = long, negative = short).
 - `RiskEngine` — aggregates portfolio Greeks as `Σ position.quantity × instrument.greeks.<greek>()`.
 - `EuropeanOption` — delegates pricing and Greeks to injected `Greeks` object; auto-wires `OptionInputs` on construction.
@@ -64,6 +66,31 @@ Dependency flow is strictly downward: `risk` → `portfolio` → `instruments` �
 - `lib/pricing/monte_carlo.py` — `simulate_gbm` (GBM path simulation) and `price_mc` (discounted mean payoff).
 - `lib/fixed_income/coupon_schedule.py` — `CouponSchedule`: backward generation of payment dates from maturity by coupon frequency.
 - `lib/fixed_income/bond.py` — `Bond`: dirty/clean price from YTM (fractional-period discounting), YTM from clean price (`brentq`), accrued interest, price from discount curve.
-- `lib/fixed_income/discount_curve.py` — `DiscountCurve`: log-linear interpolation; `df()`, `zero_rate()`, `forward_rate()`.
+- `lib/fixed_income/discount_curve.py` — `DiscountCurve`: log-linear interpolation; `df()`, `zero_rate()`, `forward_rate()`; public properties `value_date`, `dates`, `zero_rates`.
 - `lib/fixed_income/bond_analytics.py` — `BondAnalytics`: DV01, modified duration, Macaulay duration, convexity (all ±1bp bump-and-reprice).
+- `lib/fixed_income/zero_coupon_bond.py` — `ZeroCouponBond`: subclass of `Bond` with `coupon_rate=0`, `coupon_freq=1`.
+- `lib/fixed_income/frn.py` — `FloatingRateNote`: subclass of `Bond`; `coupon_rate = reference_rate + spread`.
+- `lib/fixed_income/bootstrapping/deposit.py` — `Deposit`: simple-interest df from a quoted cash rate (`ACT/360` default).
+- `lib/fixed_income/bootstrapping/fra.py` — `FRA`: chains df at the far date from `curve.df(start) / (1 + r*t)`.
+- `lib/fixed_income/bootstrapping/swap.py` — `Swap`: solves for `df(T)` analytically from the par fixed-rate condition.
+- `lib/fixed_income/bootstrapping/bootstrapper.py` — `CurveBootstrapper`: sorts instruments by maturity, bootstraps sequentially, returns a `DiscountCurve`.
+- `lib/fixed_income/irs.py` — `InterestRateSwap`: receiver convention PV (`fixed - float`), `par_rate`, `dv01` via ±1bp parallel curve shift.
+- `lib/fixed_income/callable_bond.py` — `CallableBond`: subclass of `Bond`; Ho-Lee binomial tree calibrated to a `DiscountCurve`; issuer calls at par on coupon dates ≥ `call_start`.
+- `lib/fixed_income/bond_future.py` — `BondFuture`: cost-of-carry theoretical price, conversion factor (6% notional yield), CTD selection, implied repo (`brentq`).
 - `cash_flow/`, `term_structure/`, `api/` are unimplemented placeholders.
+
+## Git / GitHub conventions
+
+Branch, PR title, and issue title all use the **same kebab slug**:
+
+```
+branch:   pr/<number>-<type>-<slug>   e.g. pr/16-feat-local-vol-cleanup
+PR title: feat-local-vol-cleanup
+issue:    feat-local-vol-cleanup
+```
+
+Valid types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `style`, `cleanup`.
+
+Feature branches use `feature/<kebab-slug>` with no number prefix. `main` is the stable trunk.
+
+A GitHub Actions workflow (`.github/workflows/branch-naming.yml`) enforces the branch pattern and asserts the PR title matches the branch slug exactly.

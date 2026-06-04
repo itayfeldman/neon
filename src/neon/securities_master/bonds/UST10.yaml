@@ -1,0 +1,5 @@
+ticker: UST10
+name: US Treasury 10 Year Note
+exchange: CBOT
+multiplier: 1000
+calendar: CBOT
