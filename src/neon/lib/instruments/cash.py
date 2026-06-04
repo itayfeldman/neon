@@ -5,7 +5,7 @@ from neon.lib.greeks import Greeks
 from neon.lib.instruments.instrument import Instrument
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class Cash(Instrument):
     ticker: str = "CASH"
     currency: Currency = Currency.USD
