@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from neon.lib.core import Currency
 from neon.lib.greeks import Greeks
@@ -10,7 +10,7 @@ class Cash(Instrument):
     ticker: str = "CASH"
     currency: Currency = Currency.USD
     multiplier: int = 1
-    greeks: Greeks = Greeks()
+    greeks: Greeks = field(default_factory=Greeks)
 
     def price(self) -> float:
         return 1.0
