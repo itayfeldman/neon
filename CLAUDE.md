@@ -78,3 +78,19 @@ Dependency flow is strictly downward: `risk` → `portfolio` → `instruments` �
 - `lib/fixed_income/callable_bond.py` — `CallableBond`: subclass of `Bond`; Ho-Lee binomial tree calibrated to a `DiscountCurve`; issuer calls at par on coupon dates ≥ `call_start`.
 - `lib/fixed_income/bond_future.py` — `BondFuture`: cost-of-carry theoretical price, conversion factor (6% notional yield), CTD selection, implied repo (`brentq`).
 - `cash_flow/`, `term_structure/`, `api/` are unimplemented placeholders.
+
+## Git / GitHub conventions
+
+Branch, PR title, and issue title all use the **same kebab slug**:
+
+```
+branch:   pr/<number>-<type>-<slug>   e.g. pr/16-feat-local-vol-cleanup
+PR title: feat-local-vol-cleanup
+issue:    feat-local-vol-cleanup
+```
+
+Valid types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `style`, `cleanup`.
+
+Feature branches use `feature/<kebab-slug>` with no number prefix. `main` is the stable trunk.
+
+A GitHub Actions workflow (`.github/workflows/branch-naming.yml`) enforces the branch pattern and asserts the PR title matches the branch slug exactly.

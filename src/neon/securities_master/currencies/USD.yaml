@@ -1,0 +1,5 @@
+ticker: USD
+name: United States Dollar
+exchange: FOREX
+multiplier: 1
+calendar:

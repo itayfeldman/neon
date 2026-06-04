@@ -1,20 +1,15 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from typing import Protocol
 
 from neon.lib.core import Currency
 from neon.lib.greeks import Greeks
 
 
-@dataclass
-class Instrument(ABC):
-    """Base class for financial instruments."""
+class Instrument(Protocol):
+    ticker: str = ""
+    currency: Currency = Currency.USD
+    multiplier: int = 1
+    greeks: Greeks = Greeks()
 
-    ticker: str
-    currency: Currency
-    multiplier: int
-    greeks: Greeks
-
-    @abstractmethod
     def price(self) -> float:
         """Calculate the price of the instrument."""
-        pass
+        raise NotImplementedError(f"Price method must be implemented by {self.__class__.__name__}.")
