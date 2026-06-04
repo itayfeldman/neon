@@ -243,3 +243,151 @@ Tasks must be executed in this order (each unblocks the next):
 2. **`AnalyticalGreeks` vanna/volga** — small, self-contained; establishes reference values for `NumericalGreeks` tests.
 3. **`AmericanOption` CRR tree** — depends on `BaseOption` being clean (step 1).
 4. **`VolatilitySurface`** — fully independent; can be done in parallel with steps 2–3.
+
+---
+
+# SPEC: Data Adapters — Phase 3
+
+## 1. Objective
+
+Add a `data` module to `neon` that fetches market and macro data from public providers and maps it to existing domain types. The adapters serve two use cases: interactive exploration in notebooks and programmatic use in pricing/risk workflows.
+
+Target user: the same quant developer using the rest of the library, primarily in Jupyter notebooks.
+
+---
+
+## 2. Providers in scope
+
+| Provider | Data | Auth |
+|---|---|---|
+| Yahoo Finance | Equities OHLCV, options chains | None (`yfinance`) |
+| FRED | Interest rates, macro series, yield curve | API key (`fredapi`) |
+| US Treasury | Daily par yield curve | None (public XML feed) |
+| Alpha Vantage | Equities, FX, crypto, technicals | API key |
+
+---
+
+## 3. Commands
+
+```bash
+uv add yfinance fredapi                    # add provider dependencies
+uv sync --group dev                        # install all deps incl. dev
+uv run pytest tests/data/                  # run adapter tests
+uv run pytest -m integration               # run live network tests (skipped by default)
+```
+
+API keys are read from environment variables:
+```bash
+export FRED_API_KEY="..."
+export ALPHA_VANTAGE_API_KEY="..."
+```
+
+---
+
+## 4. Project structure
+
+```
+src/neon/lib/data/
+    __init__.py
+    base.py              # DataAdapter ABC + DataFetchError
+    cache.py             # file-based cache (~/.neon/cache/), configurable TTL
+    yahoo.py             # YahooFinanceAdapter
+    fred.py              # FREDAdapter
+    treasury.py          # USTreasuryAdapter
+    alpha_vantage.py     # AlphaVantageAdapter
+
+tests/data/
+    conftest.py          # canned provider response fixtures
+    test_yahoo.py
+    test_fred.py
+    test_treasury.py
+    test_alpha_vantage.py
+```
+
+---
+
+## 5. Core design
+
+### `DataAdapter` ABC (`base.py`)
+
+```python
+class DataAdapter(ABC):
+    @abstractmethod
+    def fetch(self, **kwargs) -> pd.DataFrame:
+        """Return raw provider data as a DataFrame."""
+
+    @abstractmethod
+    def to_domain(self, df: pd.DataFrame):
+        """Map a raw DataFrame to a domain object."""
+```
+
+Each adapter exposes both surfaces. Callers use `fetch()` for raw data or `to_domain(fetch(...))` for domain objects.
+
+`DataFetchError` wraps all provider-level network and parse failures.
+
+### Cache (`cache.py`)
+
+- Cache directory: `~/.neon/cache/<provider>/<key>.parquet`
+- Default TTL: 1 day for market data, 7 days for macro/curve data
+- Cache key: deterministic hash of the request parameters
+- Bypass: `adapter.fetch(..., cache=False)`
+
+### Domain mappings
+
+| Adapter method | Domain type |
+|---|---|
+| `YahooFinanceAdapter.spot(ticker)` | `float` |
+| `YahooFinanceAdapter.history(ticker)` | `pd.DataFrame` |
+| `YahooFinanceAdapter.option_chain(ticker, expiry)` | `list[OptionInputs]` |
+| `FREDAdapter.series(series_id)` | `pd.DataFrame` |
+| `FREDAdapter.yield_curve(date)` | `DiscountCurve` |
+| `USTreasuryAdapter.yield_curve(date)` | `DiscountCurve` |
+| `AlphaVantageAdapter.daily(symbol)` | `pd.DataFrame` |
+| `AlphaVantageAdapter.fx_rate(from_, to)` | `float` |
+
+---
+
+## 6. Code style
+
+- Match existing conventions: dataclasses and Pydantic models for value types, no mutable global state.
+- API keys injected via constructor or environment variable — never hardcoded.
+- Raise `ValueError` for missing API keys at construction time.
+- Raise `DataFetchError` (wrapping the original exception) for all network and parse failures.
+- No retries or backoff in scope — keep adapters thin.
+
+---
+
+## 7. Testing strategy
+
+- Unit tests mock all HTTP calls — no live network in CI.
+- Fixtures in `conftest.py` provide canned provider responses saved from real calls.
+- One integration test per adapter marked `@pytest.mark.integration` — skipped by default.
+- Test `to_domain()` output against domain type contracts (e.g. `DiscountCurve.df()` returns a valid discount factor ≤ 1).
+
+---
+
+## 8. Boundaries
+
+| Category | Rule |
+|---|---|
+| **Always** | Read API keys from environment variables |
+| **Always** | Return raw `pd.DataFrame` from `fetch()` before any domain mapping |
+| **Always** | Write a unit test for every `to_domain()` mapping |
+| **Ask first** | Adding a provider not in this spec |
+| **Ask first** | Changing cache directory or TTL defaults |
+| **Ask first** | Adding retry/backoff logic |
+| **Never** | Hardcode API keys or credentials anywhere in source |
+| **Never** | Make live network calls in unit tests |
+| **Never** | Mutate cached data in place |
+| **Never** | Add dependencies beyond `yfinance`, `fredapi`, and stdlib `urllib`/`xml` |
+
+---
+
+## 9. Implementation order
+
+1. **`base.py`** — `DataAdapter` ABC and `DataFetchError`; unblocks all adapters.
+2. **`cache.py`** — file-based cache; shared by all adapters.
+3. **`USTreasuryAdapter`** — no auth, simplest to test; validates the cache and `DiscountCurve` mapping end-to-end.
+4. **`FREDAdapter`** — macro rates and yield curve; requires `FRED_API_KEY`.
+5. **`YahooFinanceAdapter`** — spot, history, option chain → `OptionInputs`.
+6. **`AlphaVantageAdapter`** — daily OHLCV and FX; requires `ALPHA_VANTAGE_API_KEY`.
