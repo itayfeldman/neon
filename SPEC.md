@@ -243,3 +243,472 @@ Tasks must be executed in this order (each unblocks the next):
 2. **`AnalyticalGreeks` vanna/volga** — small, self-contained; establishes reference values for `NumericalGreeks` tests.
 3. **`AmericanOption` CRR tree** — depends on `BaseOption` being clean (step 1).
 4. **`VolatilitySurface`** — fully independent; can be done in parallel with steps 2–3.
+
+---
+
+# SPEC: Data Adapters — Phase 3
+
+## 1. Objective
+
+Add a `data` module to `neon` that fetches market and macro data from public providers and maps it to existing domain types. The adapters serve two use cases: interactive exploration in notebooks and programmatic use in pricing/risk workflows.
+
+Target user: the same quant developer using the rest of the library, primarily in Jupyter notebooks.
+
+---
+
+## 2. Providers in scope
+
+| Provider | Data | Auth |
+|---|---|---|
+| Yahoo Finance | Equities OHLCV, options chains | None (`yfinance`) |
+| FRED | Interest rates, macro series, yield curve | API key (`fredapi`) |
+| US Treasury | Daily par yield curve | None (public XML feed) |
+| Alpha Vantage | Equities, FX, crypto, technicals | API key |
+
+---
+
+## 3. Commands
+
+```bash
+uv add yfinance fredapi                    # add provider dependencies
+uv sync --group dev                        # install all deps incl. dev
+uv run pytest tests/data/                  # run adapter tests
+uv run pytest -m integration               # run live network tests (skipped by default)
+```
+
+API keys are read from environment variables:
+```bash
+export FRED_API_KEY="..."
+export ALPHA_VANTAGE_API_KEY="..."
+```
+
+---
+
+## 4. Project structure
+
+```
+src/neon/lib/data/
+    __init__.py
+    base.py              # DataAdapter ABC + DataFetchError
+    cache.py             # file-based cache (~/.neon/cache/), configurable TTL
+    yahoo.py             # YahooFinanceAdapter
+    fred.py              # FREDAdapter
+    treasury.py          # USTreasuryAdapter
+    alpha_vantage.py     # AlphaVantageAdapter
+
+tests/data/
+    conftest.py          # canned provider response fixtures
+    test_yahoo.py
+    test_fred.py
+    test_treasury.py
+    test_alpha_vantage.py
+```
+
+---
+
+## 5. Core design
+
+### `DataAdapter` ABC (`base.py`)
+
+```python
+class DataAdapter(ABC):
+    @abstractmethod
+    def fetch(self, **kwargs) -> pd.DataFrame:
+        """Return raw provider data as a DataFrame."""
+
+    @abstractmethod
+    def to_domain(self, df: pd.DataFrame):
+        """Map a raw DataFrame to a domain object."""
+```
+
+Each adapter exposes both surfaces. Callers use `fetch()` for raw data or `to_domain(fetch(...))` for domain objects.
+
+`DataFetchError` wraps all provider-level network and parse failures.
+
+### Cache (`cache.py`)
+
+- Cache directory: `~/.neon/cache/<provider>/<key>.parquet`
+- Default TTL: 1 day for market data, 7 days for macro/curve data
+- Cache key: deterministic hash of the request parameters
+- Bypass: `adapter.fetch(..., cache=False)`
+
+### Domain mappings
+
+| Adapter method | Domain type |
+|---|---|
+| `YahooFinanceAdapter.spot(ticker)` | `float` |
+| `YahooFinanceAdapter.history(ticker)` | `pd.DataFrame` |
+| `YahooFinanceAdapter.option_chain(ticker, expiry)` | `list[OptionInputs]` |
+| `FREDAdapter.series(series_id)` | `pd.DataFrame` |
+| `FREDAdapter.yield_curve(date)` | `DiscountCurve` |
+| `USTreasuryAdapter.yield_curve(date)` | `DiscountCurve` |
+| `AlphaVantageAdapter.daily(symbol)` | `pd.DataFrame` |
+| `AlphaVantageAdapter.fx_rate(from_, to)` | `float` |
+
+---
+
+## 6. Code style
+
+- Match existing conventions: dataclasses and Pydantic models for value types, no mutable global state.
+- API keys injected via constructor or environment variable — never hardcoded.
+- Raise `ValueError` for missing API keys at construction time.
+- Raise `DataFetchError` (wrapping the original exception) for all network and parse failures.
+- No retries or backoff in scope — keep adapters thin.
+
+---
+
+## 7. Testing strategy
+
+- Unit tests mock all HTTP calls — no live network in CI.
+- Fixtures in `conftest.py` provide canned provider responses saved from real calls.
+- One integration test per adapter marked `@pytest.mark.integration` — skipped by default.
+- Test `to_domain()` output against domain type contracts (e.g. `DiscountCurve.df()` returns a valid discount factor ≤ 1).
+
+---
+
+## 8. Boundaries
+
+| Category | Rule |
+|---|---|
+| **Always** | Read API keys from environment variables |
+| **Always** | Return raw `pd.DataFrame` from `fetch()` before any domain mapping |
+| **Always** | Write a unit test for every `to_domain()` mapping |
+| **Ask first** | Adding a provider not in this spec |
+| **Ask first** | Changing cache directory or TTL defaults |
+| **Ask first** | Adding retry/backoff logic |
+| **Never** | Hardcode API keys or credentials anywhere in source |
+| **Never** | Make live network calls in unit tests |
+| **Never** | Mutate cached data in place |
+| **Never** | Add dependencies beyond `yfinance`, `fredapi`, and stdlib `urllib`/`xml` |
+
+---
+
+## 9. Implementation order
+
+1. **`base.py`** — `DataAdapter` ABC and `DataFetchError`; unblocks all adapters.
+2. **`cache.py`** — file-based cache; shared by all adapters.
+3. **`USTreasuryAdapter`** — no auth, simplest to test; validates the cache and `DiscountCurve` mapping end-to-end.
+4. **`FREDAdapter`** — macro rates and yield curve; requires `FRED_API_KEY`.
+5. **`YahooFinanceAdapter`** — spot, history, option chain → `OptionInputs`.
+6. **`AlphaVantageAdapter`** — daily OHLCV and FX; requires `ALPHA_VANTAGE_API_KEY`.
+
+---
+
+# SPEC: Dashboard — Phase 4
+
+## 1. Objective
+
+A browser-based analytics dashboard for **neon** — built with Vite + React + TypeScript — that lets a quant developer interactively explore options pricing, Greeks, vol surfaces, and fixed-income analytics for any ticker. The dashboard is a single-page app that calls the existing FastAPI backend (already scaffolded) and three new backend endpoints added in this phase.
+
+**Target user:** the same single quant developer, running both servers locally.
+
+**Success looks like:** enter a ticker and an expiry date; see a price chart, options chain, Greeks table, interactive 3D vol surface, and a portfolio Greeks panel — all populated from live market data.
+
+---
+
+## 2. Commands
+
+```bash
+# Frontend
+cd dashboard
+npm install              # install dependencies
+npm run dev              # dev server on :5173 (proxies /stock → :8000)
+npm run build            # production build
+npm run typecheck        # tsc --noEmit
+
+# Backend (from project root)
+uv run uvicorn neon.api.main:app --reload   # API on :8000
+
+# Tests
+cd dashboard && npm test                    # Vitest unit tests
+uv run pytest tests/api/                   # FastAPI endpoint tests
+```
+
+---
+
+## 3. Tech stack
+
+| Layer | Tool |
+|---|---|
+| Build | Vite 6, TypeScript, `@vitejs/plugin-react` |
+| UI | React 19, Tailwind CSS v4 (`@tailwindcss/vite`) |
+| Data fetching | TanStack Query v5 (`@tanstack/react-query`) |
+| HTTP | Axios |
+| Charts | Recharts (line/bar), Plotly.js (`react-plotly.js`) for 3D surface |
+| Backend | FastAPI (existing), three new routers |
+| Tests (FE) | Vitest + React Testing Library |
+| Tests (BE) | pytest + FastAPI `TestClient` |
+
+No additional Python dependencies. `react-plotly.js` + `plotly.js` added to `dashboard/package.json`.
+
+---
+
+## 4. Project structure
+
+```
+dashboard/src/
+├── api.ts                          # typed axios calls (extend existing)
+├── App.tsx                         # top-level layout + ticker/expiry form
+├── main.tsx                        # QueryClientProvider entry
+├── index.css                       # @import "tailwindcss"
+└── components/
+    ├── PriceChart.tsx              # Recharts line chart (existing)
+    ├── OptionsChain.tsx            # calls/puts table (existing)
+    ├── GreeksTable.tsx             # delta/gamma/vega/theta table (existing)
+    ├── VolSurface.tsx              # NEW — Plotly.js 3D surface
+    ├── PortfolioGreeks.tsx         # NEW — JSON input + aggregated Greeks
+    └── BondAnalytics.tsx          # NEW — bond price, DV01, duration
+
+src/neon/api/routers/
+├── stock.py                        # existing
+├── options.py                      # existing
+├── greeks.py                       # existing
+├── surface.py                      # existing (raw IV grid)
+├── svi_surface.py                  # NEW — calibrated SVI surface
+├── portfolio.py                    # NEW — portfolio Greeks via RiskEngine
+└── bonds.py                        # NEW — bond pricing and analytics
+
+tests/api/
+├── test_svi_surface.py             # NEW
+├── test_portfolio.py               # NEW
+└── test_bonds.py                   # NEW
+```
+
+---
+
+## 5. Feature specs
+
+### 5.1 Vol surface panel — `VolSurface.tsx` + `/stock/{ticker}/svi-surface`
+
+**Backend — `GET /stock/{ticker}/svi-surface`**
+
+Calibrates `SVISurface` for the ticker (up to 8 nearest expiries from `yf.Ticker.options`) and returns a structured grid:
+
+```json
+{
+  "strikes": [float, ...],
+  "expiries": ["YYYY-MM-DD", ...],
+  "vols": [[float, ...], ...]   // shape [n_strikes][n_expiries]
+}
+```
+
+Response model reuses `SurfaceResponse` from `surface.py`. Uses `SVISurface.calibrate()` from `lib/instruments/surface/svi.py`; falls back to raw IV grid (existing `surface.py` logic) if calibration fails for an expiry.
+
+**Frontend — `VolSurface.tsx`**
+
+- Plotly.js `surface` trace: x = expiries (strings), y = strikes (floats), z = vols grid.
+- Color scale: Viridis.
+- Layout: dark background matching Tailwind `slate-950`, no axis gridlines.
+- Loading / error states consistent with other panels.
+
+**Acceptance:**
+- Grid point lookup returns stored vol within `abs=1e-6`.
+- Chart renders without NaN or zero-vol gaps (filter or clamp before passing to Plotly).
+- Endpoint returns 404 with a message if no options data is available for the ticker.
+
+---
+
+### 5.2 Portfolio Greeks panel — `PortfolioGreeks.tsx` + `POST /portfolio/greeks`
+
+**Backend — `POST /portfolio/greeks`**
+
+Request body:
+
+```json
+{
+  "positions": [
+    {
+      "ticker": "AAPL",
+      "expiry": "2026-01-16",
+      "strike": 200.0,
+      "option_type": "call",
+      "quantity": 10
+    }
+  ]
+}
+```
+
+- Fetches spot price via `YahooFinanceAdapter.spot(ticker)`.
+- Constructs `OptionInputs` for each position (IV from `YahooFinanceAdapter.option_chain`; falls back to `volatility=0.2` if not found).
+- Wraps each in `EuropeanOption(inputs, AnalyticalGreeks())` and a `Position(instrument, quantity)`.
+- Builds a `Portfolio` and calls `RiskEngine(portfolio).greeks()`.
+- Returns aggregated Greeks: `delta`, `gamma`, `vega`, `theta` as floats.
+
+Response model:
+
+```json
+{
+  "delta": float,
+  "gamma": float,
+  "vega": float,
+  "theta": float
+}
+```
+
+**Frontend — `PortfolioGreeks.tsx`**
+
+- `<textarea>` pre-filled with example JSON.
+- "Calculate" button → POST → renders a summary row of the four aggregated Greeks.
+- Inline validation: shows a parse error if the JSON is malformed before hitting the backend.
+- Loading and error states.
+
+**Acceptance:**
+- Empty positions list returns all Greeks as `0.0`.
+- Single ATM call with quantity 1 returns delta ≈ 0.5, gamma > 0, vega > 0, theta < 0.
+- Quantity is signed: negative quantity flips the sign of all Greeks.
+
+---
+
+### 5.3 Bond analytics panel — `BondAnalytics.tsx` + `POST /bonds/price`
+
+**Backend — `POST /bonds/price`**
+
+Request body:
+
+```json
+{
+  "face_value": 1000.0,
+  "coupon_rate": 0.05,
+  "coupon_freq": 2,
+  "issue_date": "20240101",
+  "maturity_date": "20340101",
+  "ytm": 0.045
+}
+```
+
+- Constructs a `Bond` from `lib/fixed_income/bond.py`.
+- Computes dirty price, clean price, accrued interest, modified duration, Macaulay duration, DV01, convexity via `BondAnalytics`.
+- Returns all as floats.
+
+Response model:
+
+```json
+{
+  "dirty_price": float,
+  "clean_price": float,
+  "accrued_interest": float,
+  "modified_duration": float,
+  "macaulay_duration": float,
+  "dv01": float,
+  "convexity": float
+}
+```
+
+**Frontend — `BondAnalytics.tsx`**
+
+- Form with labelled numeric inputs for each field (pre-filled with sensible defaults).
+- "Price" button → POST → renders a summary card of all seven outputs.
+- Client-side validation: `coupon_rate` and `ytm` must be in `[0, 1]`; `maturity_date` must be after `issue_date`.
+
+**Acceptance:**
+- 5% coupon at 4.5% YTM prices above par (dirty price > 1000).
+- DV01 is negative (price falls when yield rises).
+- All outputs are finite floats; no `NaN` or `Infinity`.
+
+---
+
+### 5.4 `optioncharts.io`-style charts
+
+Implement the following chart types, modelled on the visual language of optioncharts.io:
+
+| Chart | Data source | Component |
+|---|---|---|
+| IV smile (per expiry) | `/stock/{ticker}/options/{expiry}` | `IVSmile.tsx` — Recharts line, x = strike, y = IV% |
+| Delta vs strike | `/stock/{ticker}/greeks/{expiry}` | `DeltaSmile.tsx` — Recharts line, x = strike, y = delta; calls and puts on same axis |
+| Gamma vs strike | same Greeks endpoint | `GammaSmile.tsx` |
+| Theta vs strike | same Greeks endpoint | `ThetaSmile.tsx` |
+
+All four share the same Recharts `<LineChart>` skeleton — extract a `<SmileChart title xLabel yLabel data>` base component to avoid repetition.
+
+**Acceptance:**
+- IV smile is U-shaped (smile/skew visible) for a liquid ticker with a near-term expiry.
+- Delta curve runs from ~0 (deep OTM put) to ~1 (deep ITM call).
+- All charts render error state if the endpoint returns no rows.
+
+---
+
+## 6. Layout
+
+Single-page layout with a sticky top bar containing the ticker input, expiry input, and Load button. Panels below in a two-column grid on wide screens, single column on narrow:
+
+```
+┌──────────────────────────────────────────────┐
+│  neon dashboard   [ticker] [expiry]  [Load]  │  ← sticky header
+├────────────────────┬─────────────────────────┤
+│  Price Chart       │  Vol Surface (3D)        │
+├────────────────────┼─────────────────────────┤
+│  Options Chain     │  IV Smile                │
+├────────────────────┼─────────────────────────┤
+│  Greeks Table      │  Delta / Gamma / Theta   │
+├────────────────────┴─────────────────────────┤
+│  Portfolio Greeks (full width)               │
+├──────────────────────────────────────────────┤
+│  Bond Analytics (full width)                 │
+└──────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Code style
+
+### Frontend
+
+- One component per file; no component exports more than one public symbol.
+- All API response shapes typed in `api.ts`; no `any`.
+- TanStack Query for all async data — no raw `useEffect` + `useState` for fetching.
+- Tailwind utility classes only; no custom CSS files beyond `index.css`.
+- `type` imports enforced (`verbatimModuleSyntax`).
+
+### Backend
+
+- New routers follow the existing pattern: `APIRouter(prefix=..., tags=[...])`, Pydantic request/response models, raise `HTTPException` for all error cases.
+- No business logic in routers — delegate to domain objects.
+- Module-level adapter singletons (`_adapter = YahooFinanceAdapter()`).
+
+---
+
+## 8. Testing strategy
+
+### Frontend
+
+- Vitest + React Testing Library.
+- Each component has one test file: render with mock data, assert key elements visible.
+- Mock `@tanstack/react-query` at the module level to return canned data — no real HTTP in tests.
+- `PortfolioGreeks.tsx`: test JSON parse error path and the happy-path render.
+
+### Backend
+
+- `pytest` + FastAPI `TestClient`.
+- Mock `YahooFinanceAdapter` and `yfinance` in all tests — no live network.
+- One test class per endpoint: `TestSVISurface`, `TestPortfolioGreeks`, `TestBondPrice`.
+- Cover: 200 happy path, 404 not found, 422 validation error.
+
+---
+
+## 9. Boundaries
+
+| Category | Rule |
+|---|---|
+| **Always** | New routers follow `APIRouter(prefix=..., tags=[...])` convention |
+| **Always** | All fetch calls go through `api.ts` — no inline `axios` in components |
+| **Always** | Run `npm run typecheck` and `uv run ruff check .` before marking done |
+| **Always** | Filter zero/NaN vols before passing to Plotly surface |
+| **Ask first** | Adding any npm package beyond what's in this spec |
+| **Ask first** | Adding any new Python dependency |
+| **Ask first** | Changing the `/portfolio/greeks` request schema |
+| **Never** | Business logic in React components — keep components as thin views |
+| **Never** | Raw `useEffect` + `setState` for data fetching |
+| **Never** | Import from `neon.lib` across router boundaries (routers call domain objects, not each other) |
+
+---
+
+## 10. Implementation order
+
+1. **`svi_surface.py` router + tests** — independent of frontend work; validates SVI calibration end-to-end.
+2. **`portfolio.py` router + tests** — depends on `RiskEngine` (already built).
+3. **`bonds.py` router + tests** — depends on `Bond` and `BondAnalytics` (already built).
+4. **`VolSurface.tsx`** — add `react-plotly.js`, implement 3D chart, wire to `/svi-surface`.
+5. **`SmileChart` base + `IVSmile`, `DeltaSmile`, `GammaSmile`, `ThetaSmile`** — reuse existing endpoints.
+6. **`PortfolioGreeks.tsx`** — wire to `/portfolio/greeks`.
+7. **`BondAnalytics.tsx`** — wire to `/bonds/price`.
+8. **Layout refactor** — two-column grid, sticky header, responsive breakpoints.
