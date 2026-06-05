@@ -1,10 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { Component, type ReactNode } from 'react'
-import createPlotlyComponent from 'react-plotly.js/factory'
-// plotly-gl3d contains only the 3D traces needed for surface plots
-import Plotly from 'plotly.js/dist/plotly-gl3d' // partial bundle with only 3D traces
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import _factory from 'react-plotly.js/factory'
+// plotly-gl3d is browser-only; excluded from Vite pre-bundling via optimizeDeps.exclude
+import Plotly from 'plotly.js/dist/plotly-gl3d'
 import { fetchSviSurface } from '../api'
 
+// CJS interop: factory.js exports { default: fn }, not fn directly
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createPlotlyComponent = (_factory as any).default ?? _factory
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Plot = createPlotlyComponent(Plotly as any)
 
