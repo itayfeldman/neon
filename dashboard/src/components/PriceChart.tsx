@@ -14,15 +14,15 @@ export function PriceChart({ ticker, onSpot }: Props) {
     queryFn: () => fetchHistory(ticker),
   })
 
-  if (isPending) return <div className="text-slate-400">Loading…</div>
-  if (isError) return <div className="text-red-400">Failed to load price history.</div>
-
-  const latestClose = data.closes[data.closes.length - 1]
+  const latestClose = data?.closes[data.closes.length - 1]
   useEffect(() => {
     if (onSpot && latestClose) onSpot(latestClose)
   }, [latestClose, onSpot])
 
-  const points = data.dates.map((date, i) => ({ date, close: data.closes[i] }))
+  if (isPending) return <div className="text-slate-400">Loading…</div>
+  if (isError) return <div className="text-red-400">Failed to load price history.</div>
+
+  const points = data.closes.map((close, i) => ({ date: data.dates[i], close }))
 
   return (
     <ResponsiveContainer width="100%" height={280}>
