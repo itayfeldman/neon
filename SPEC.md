@@ -712,3 +712,251 @@ Single-page layout with a sticky top bar containing the ticker input, expiry inp
 6. **`PortfolioGreeks.tsx`** — wire to `/portfolio/greeks`.
 7. **`BondAnalytics.tsx`** — wire to `/bonds/price`.
 8. **Layout refactor** — two-column grid, sticky header, responsive breakpoints.
+
+---
+
+# SPEC: Cloud Deployment — Phase 5
+
+## 1. Objective
+
+Deploy **neon** to Azure so the app is publicly accessible and scales automatically with traffic. The FastAPI backend runs on Azure Container Apps (serverless containers, HTTP autoscaling, minimum 1 replica). The React SPA is served via Azure Static Web Apps (CDN-backed, GitHub-integrated). CI/CD is handled by Azure DevOps pipelines.
+
+**Target user:** the same single quant developer, accessing the app from a browser anywhere.
+
+**Success looks like:** push to `main` → pipeline builds and pushes the container → Container App updates → Static Web App redeploys the SPA — all without manual steps. The API scales from 1 to N replicas under load and back to 1 when quiet.
+
+---
+
+## 2. Azure resource map
+
+| Resource | Purpose | Tier |
+|---|---|---|
+| Azure Container Registry (ACR) | Stores the FastAPI Docker image | Basic |
+| Azure Container Apps Environment | Shared networking / log analytics for all container apps | Consumption |
+| Azure Container App — `neon-api` | Runs the FastAPI backend; HTTP ingress on port 8000 | Consumption (min 1, max 10 replicas) |
+| Azure Static Web Apps — `neon-dashboard` | Serves the Vite SPA from CDN | Free |
+| Azure Key Vault | Stores `FRED_API_KEY`, `ALPHA_VANTAGE_API_KEY`, and any future secrets | Standard |
+| Log Analytics Workspace | Container Apps logs and metrics | Pay-as-you-go |
+
+All resources live in a single resource group (`rg-neon`), single region (`eastus2` default — override via pipeline variable).
+
+---
+
+## 3. Commands
+
+```bash
+# Provision infrastructure (one-time, run locally with az CLI)
+az login
+az group create --name rg-neon --location eastus2
+az acr create --resource-group rg-neon --name neoncr --sku Basic
+az containerapp env create --name neon-env --resource-group rg-neon --location eastus2
+
+# Build and push image locally (dev/debug)
+docker build -t neoncr.azurecr.io/neon-api:latest .
+az acr login --name neoncr
+docker push neoncr.azurecr.io/neon-api:latest
+
+# Deploy container app (first time)
+az containerapp create \
+  --name neon-api \
+  --resource-group rg-neon \
+  --environment neon-env \
+  --image neoncr.azurecr.io/neon-api:latest \
+  --target-port 8000 \
+  --ingress external \
+  --min-replicas 1 \
+  --max-replicas 10 \
+  --scale-rule-name http-rule \
+  --scale-rule-type http \
+  --scale-rule-http-concurrency 20
+
+# Update after image push (done by pipeline)
+az containerapp update --name neon-api --resource-group rg-neon \
+  --image neoncr.azurecr.io/neon-api:<tag>
+```
+
+---
+
+## 4. Project structure additions
+
+```
+/                               (project root)
+├── Dockerfile                  ← NEW — FastAPI container image
+├── .dockerignore               ← NEW
+├── infra/
+│   ├── main.bicep              ← NEW — Bicep template for all Azure resources
+│   └── parameters.json         ← NEW — environment-specific parameter values
+└── .azure-pipelines/
+    ├── backend.yml             ← NEW — build, push image, update Container App
+    └── frontend.yml            ← NEW — build SPA, deploy to Static Web Apps
+```
+
+The `dashboard/` frontend build is already handled by Azure Static Web Apps' built-in GitHub/ADO integration; `frontend.yml` only needs to set the build output path (`dashboard/dist`).
+
+---
+
+## 5. Feature specs
+
+### 5.1 Dockerfile
+
+```dockerfile
+FROM python:3.13-slim
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN pip install uv && uv sync --no-dev
+COPY src/ src/
+EXPOSE 8000
+CMD ["uv", "run", "uvicorn", "neon.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+- Multi-stage build is not required (no compiled assets).
+- `uv sync --no-dev` installs only runtime dependencies — dev tools (`pytest`, `ruff`) are excluded.
+- `.dockerignore` excludes `dashboard/`, `tests/`, `*.md`, `__pycache__/`, `.venv/`.
+
+**Acceptance:**
+- `docker build` completes without error.
+- `docker run -p 8000:8000` serves `GET /health` → `{"status": "ok"}`.
+- Image size < 500 MB.
+
+---
+
+### 5.2 `/health` endpoint
+
+Add `GET /health` to `src/neon/api/main.py`:
+
+```python
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+```
+
+Required by Azure Container Apps liveness and readiness probes.
+
+**Acceptance:**
+- Returns `200 {"status": "ok"}` with no auth.
+- Added to `tests/api/test_health.py`.
+
+---
+
+### 5.3 Bicep infrastructure (`infra/main.bicep`)
+
+Declares all resources in §2 as code. Parameterised:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `location` | `eastus2` | Azure region |
+| `acrName` | `neoncr` | Container registry name (must be globally unique) |
+| `minReplicas` | `1` | Container App min replicas |
+| `maxReplicas` | `10` | Container App max replicas |
+| `concurrencyThreshold` | `20` | HTTP requests/replica before scale-out |
+
+**Acceptance:**
+- `az deployment group validate --template-file infra/main.bicep` passes with no errors.
+- A fresh `az deployment group create` from the template produces all resources in §2.
+
+---
+
+### 5.4 Azure DevOps pipeline — backend (`.azure-pipelines/backend.yml`)
+
+Trigger: push to `main` with changes under `src/`, `Dockerfile`, or `pyproject.toml`.
+
+Stages:
+1. **Test** — `uv run pytest tests/` and `uv run ruff check .`; fail fast on error.
+2. **Build & Push** — `docker build` → tag with `$(Build.BuildId)` and `latest` → `docker push` to ACR.
+3. **Deploy** — `az containerapp update --image neoncr.azurecr.io/neon-api:$(Build.BuildId)`.
+
+Pipeline variables (stored in Azure DevOps variable group `neon-secrets`, not in YAML):
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `AZURE_TENANT_ID` (service principal)
+- `ACR_NAME`
+- `FRED_API_KEY`
+- `ALPHA_VANTAGE_API_KEY`
+
+Secrets are injected as environment variables into the Container App via `az containerapp update --set-env-vars`.
+
+**Acceptance:**
+- Pipeline runs green on push to `main`.
+- Container App URL returns `200` on `GET /health` after deploy.
+- Secrets never appear in pipeline logs (use `isSecret: true` in variable group).
+
+---
+
+### 5.5 Azure DevOps pipeline — frontend (`.azure-pipelines/frontend.yml`)
+
+Trigger: push to `main` with changes under `dashboard/`.
+
+Stages:
+1. **Build** — `cd dashboard && npm ci && npm run build` → artifact at `dashboard/dist/`.
+2. **Deploy** — Azure Static Web Apps deploy task (`AzureStaticWebApp@0`) pointing at `dashboard/dist/`.
+
+Pipeline variable: `AZURE_STATIC_WEB_APPS_API_TOKEN` (from SWA deployment token, stored in variable group).
+
+**Acceptance:**
+- SPA loads at the Static Web Apps URL after deploy.
+- API calls from the SPA reach the Container App (CORS configured in FastAPI — `ALLOWED_ORIGINS` env var, defaulting to `*` for development).
+
+---
+
+### 5.6 CORS configuration
+
+Add `CORSMiddleware` to `src/neon/api/main.py`:
+
+```python
+import os
+from fastapi.middleware.cors import CORSMiddleware
+
+origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
+```
+
+In production, `ALLOWED_ORIGINS` is set to the Static Web Apps URL via `az containerapp update --set-env-vars`.
+
+---
+
+## 6. Scaling policy
+
+| Metric | Value |
+|---|---|
+| Scale trigger | Concurrent HTTP requests per replica |
+| Scale-out threshold | 20 requests/replica |
+| Min replicas | 1 (always warm — no cold starts) |
+| Max replicas | 10 |
+| Scale-in cooldown | Azure Container Apps default (5 min) |
+
+The 1-replica minimum keeps the API responsive for the moderate/unpredictable traffic pattern without cold-start latency.
+
+---
+
+## 7. Testing strategy
+
+- `tests/api/test_health.py` — unit test for the `/health` endpoint.
+- Bicep validation runs in the backend pipeline as a pre-deploy check (`az deployment group validate`).
+- No new integration tests beyond what exists — the pipeline's post-deploy `GET /health` smoke check is sufficient.
+
+---
+
+## 8. Boundaries
+
+| Category | Rule |
+|---|---|
+| **Always** | Secrets in Azure Key Vault / ADO variable groups — never in source |
+| **Always** | Tag images with `$(Build.BuildId)` in addition to `latest` |
+| **Always** | Run tests before building the image |
+| **Always** | `ALLOWED_ORIGINS` must be set to the SWA URL in production |
+| **Ask first** | Adding a database or persistent storage (stateless app assumed) |
+| **Ask first** | Changing the Azure region |
+| **Ask first** | Moving to a Dedicated Container Apps plan (cost implications) |
+| **Never** | Hardcode secrets or subscription IDs in Bicep or pipeline YAML |
+| **Never** | Push the `latest` tag without also pushing a build-ID tag |
+| **Never** | Skip the test stage to speed up a deploy |
+
+---
+
+## 9. Implementation order
+
+1. **`GET /health` endpoint + test** — required by Container Apps probes; trivial, unblocks everything.
+2. **`Dockerfile` + `.dockerignore`** — verify `docker build` and `docker run` locally before pushing to ACR.
+3. **Bicep template** — provision all Azure resources; validate with `az deployment group validate`.
+4. **CORS middleware** — needed before the SPA can call the API from a different origin.
+5. **Backend ADO pipeline** — wire up test → build → push → deploy; validate with a push to `main`.
+6. **Frontend ADO pipeline** — wire up build → SWA deploy; validate end-to-end in the browser.
