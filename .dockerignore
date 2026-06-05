@@ -1,0 +1,14 @@
+dashboard/
+tests/
+docs/
+notebooks/
+*.md
+.git/
+.venv/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+infra/
+.azure-pipelines/
+securities_master/
