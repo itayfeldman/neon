@@ -1,6 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
-import Plot from 'react-plotly.js'
+import { Component, type ReactNode } from 'react'
+import createPlotlyComponent from 'react-plotly.js/factory'
+// plotly-gl3d contains only the 3D traces needed for surface plots
+import Plotly from 'plotly.js/dist/plotly-gl3d' // partial bundle with only 3D traces
 import { fetchSviSurface } from '../api'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Plot = createPlotlyComponent(Plotly as any)
+
+interface ErrorBoundaryState { error: boolean }
+
+class PlotErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state = { error: false }
+  static getDerivedStateFromError() { return { error: true } }
+  render() {
+    if (this.state.error) return <div className="text-red-400">Chart failed to render.</div>
+    return this.props.children
+  }
+}
 
 interface Props {
   ticker: string
@@ -18,31 +35,33 @@ export function VolSurface({ ticker }: Props) {
   const z = data.vols.map(row => row.map(v => +(v * 100).toFixed(2)))
 
   return (
-    <Plot
-      data={[{
-        type: 'surface',
-        x: data.expiries,
-        y: data.strikes,
-        z,
-        colorscale: 'Viridis',
-        showscale: true,
-        colorbar: { tickfont: { color: '#94a3b8' } },
-      }]}
-      layout={{
-        autosize: true,
-        paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent',
-        scene: {
-          xaxis: { title: { text: 'Expiry' }, color: '#94a3b8', gridcolor: '#1e293b' },
-          yaxis: { title: { text: 'Strike' }, color: '#94a3b8', gridcolor: '#1e293b' },
-          zaxis: { title: { text: 'IV %' }, color: '#94a3b8', gridcolor: '#1e293b' },
-          bgcolor: 'transparent',
-        },
-        margin: { l: 0, r: 0, t: 0, b: 0 },
-        font: { color: '#94a3b8' },
-      }}
-      style={{ width: '100%', height: '340px' }}
-      config={{ displayModeBar: false, responsive: true }}
-    />
+    <PlotErrorBoundary>
+      <Plot
+        data={[{
+          type: 'surface',
+          x: data.expiries,
+          y: data.strikes,
+          z,
+          colorscale: 'Viridis',
+          showscale: true,
+          colorbar: { tickfont: { color: '#94a3b8' } },
+        }]}
+        layout={{
+          autosize: true,
+          paper_bgcolor: 'transparent',
+          plot_bgcolor: 'transparent',
+          scene: {
+            xaxis: { title: { text: 'Expiry' }, color: '#94a3b8', gridcolor: '#1e293b' },
+            yaxis: { title: { text: 'Strike' }, color: '#94a3b8', gridcolor: '#1e293b' },
+            zaxis: { title: { text: 'IV %' }, color: '#94a3b8', gridcolor: '#1e293b' },
+            bgcolor: 'transparent',
+          },
+          margin: { l: 0, r: 0, t: 0, b: 0 },
+          font: { color: '#94a3b8' },
+        }}
+        style={{ width: '100%', height: '340px' }}
+        config={{ displayModeBar: false, responsive: true }}
+      />
+    </PlotErrorBoundary>
   )
 }
