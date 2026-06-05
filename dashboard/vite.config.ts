@@ -11,7 +11,4 @@ export default defineConfig({
       '/bonds': 'http://localhost:8000',
     },
   },
-  optimizeDeps: {
-    exclude: ['plotly.js', 'react-plotly.js'],
-  },
 })
