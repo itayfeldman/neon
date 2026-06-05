@@ -18,6 +18,7 @@ export interface OptionRow {
   bid: number
   ask: number
   volume: number
+  open_interest: number
   option_type: 'call' | 'put'
 }
 

@@ -7,6 +7,10 @@ import { IVSmile, DeltaSmile, GammaSmile, ThetaSmile } from './components/SmileC
 import { PortfolioGreeks } from './components/PortfolioGreeks'
 import { BondAnalytics } from './components/BondAnalytics'
 import { PayoffChart } from './components/PayoffChart'
+import { OpenInterestChart } from './components/OpenInterestChart'
+import { MaxPainChart } from './components/MaxPainChart'
+import { ProbabilityChart } from './components/ProbabilityChart'
+import { ExpectedMoveChart } from './components/ExpectedMoveChart'
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -110,6 +114,23 @@ export default function App() {
                   <ThetaSmile ticker={ticker} expiry={expiry} />
                 </Panel>
               </div>
+            </>
+          )}
+
+          {expiry && (
+            <>
+              <Panel title={`Open Interest — ${expiry}`}>
+                <OpenInterestChart ticker={ticker} expiry={expiry} spot={spot} />
+              </Panel>
+              <Panel title={`Max Pain — ${expiry}`}>
+                <MaxPainChart ticker={ticker} expiry={expiry} spot={spot} />
+              </Panel>
+              <Panel title={`Probability Distribution — ${expiry}`}>
+                <ProbabilityChart ticker={ticker} expiry={expiry} spot={spot} />
+              </Panel>
+              <Panel title={`Expected Move — ${expiry}`}>
+                <ExpectedMoveChart ticker={ticker} expiry={expiry} spot={spot} />
+              </Panel>
             </>
           )}
 

@@ -14,6 +14,7 @@ class OptionRow(BaseModel):
     bid: float
     ask: float
     volume: int
+    open_interest: int
     option_type: str
 
 
@@ -38,6 +39,7 @@ def get_options(ticker: str, expiry: str) -> OptionsResponse:
                 bid=float(r.get("bid") or 0.0),
                 ask=float(r.get("ask") or 0.0),
                 volume=int(r.get("volume") or 0),
+                open_interest=int(r.get("openInterest") or 0),
                 option_type=option_type,
             )
             for _, r in df.iterrows()
