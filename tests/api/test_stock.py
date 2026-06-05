@@ -1,7 +1,6 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
-import pytest
 from fastapi.testclient import TestClient
 
 from neon.api.main import app

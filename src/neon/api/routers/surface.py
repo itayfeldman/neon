@@ -1,3 +1,4 @@
+import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -16,7 +17,6 @@ class SurfaceResponse(BaseModel):
 @router.get("/{ticker}/surface", response_model=SurfaceResponse)
 def get_surface(ticker: str) -> SurfaceResponse:
     try:
-        import yfinance as yf
         tk = yf.Ticker(ticker)
         expiry_dates = tk.options
     except Exception as exc:

@@ -1,7 +1,7 @@
+import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from neon.lib.data.base import DataFetchError
 from neon.lib.data.yahoo import YahooFinanceAdapter
 
 router = APIRouter(prefix="/stock", tags=["options"])
@@ -25,7 +25,6 @@ class OptionsResponse(BaseModel):
 @router.get("/{ticker}/options/{expiry}", response_model=OptionsResponse)
 def get_options(ticker: str, expiry: str) -> OptionsResponse:
     try:
-        import yfinance as yf
         tk = yf.Ticker(ticker)
         chain = tk.option_chain(expiry)
     except Exception as exc:
