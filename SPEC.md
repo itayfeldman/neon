@@ -243,3 +243,306 @@ Tasks must be executed in this order (each unblocks the next):
 2. **`AnalyticalGreeks` vanna/volga** — small, self-contained; establishes reference values for `NumericalGreeks` tests.
 3. **`AmericanOption` CRR tree** — depends on `BaseOption` being clean (step 1).
 4. **`VolatilitySurface`** — fully independent; can be done in parallel with steps 2–3.
+
+---
+
+# SPEC: Data Adapters — Phase 3
+
+## 1. Objective
+
+Add a `data` module to `neon` that fetches market and macro data from public providers and maps it to existing domain types. The adapters serve two use cases: interactive exploration in notebooks and programmatic use in pricing/risk workflows.
+
+Target user: the same quant developer using the rest of the library, primarily in Jupyter notebooks.
+
+---
+
+## 2. Providers in scope
+
+| Provider | Data | Auth |
+|---|---|---|
+| Yahoo Finance | Equities OHLCV, options chains | None (`yfinance`) |
+| FRED | Interest rates, macro series, yield curve | API key (`fredapi`) |
+| US Treasury | Daily par yield curve | None (public XML feed) |
+| Alpha Vantage | Equities, FX, crypto, technicals | API key |
+
+---
+
+## 3. Commands
+
+```bash
+uv add yfinance fredapi                    # add provider dependencies
+uv sync --group dev                        # install all deps incl. dev
+uv run pytest tests/data/                  # run adapter tests
+uv run pytest -m integration               # run live network tests (skipped by default)
+```
+
+API keys are read from environment variables:
+```bash
+export FRED_API_KEY="..."
+export ALPHA_VANTAGE_API_KEY="..."
+```
+
+---
+
+## 4. Project structure
+
+```
+src/neon/lib/data/
+    __init__.py
+    base.py              # DataAdapter ABC + DataFetchError
+    cache.py             # file-based cache (~/.neon/cache/), configurable TTL
+    yahoo.py             # YahooFinanceAdapter
+    fred.py              # FREDAdapter
+    treasury.py          # USTreasuryAdapter
+    alpha_vantage.py     # AlphaVantageAdapter
+
+tests/data/
+    conftest.py          # canned provider response fixtures
+    test_yahoo.py
+    test_fred.py
+    test_treasury.py
+    test_alpha_vantage.py
+```
+
+---
+
+## 5. Core design
+
+### `DataAdapter` ABC (`base.py`)
+
+```python
+class DataAdapter(ABC):
+    @abstractmethod
+    def fetch(self, **kwargs) -> pd.DataFrame:
+        """Return raw provider data as a DataFrame."""
+
+    @abstractmethod
+    def to_domain(self, df: pd.DataFrame):
+        """Map a raw DataFrame to a domain object."""
+```
+
+Each adapter exposes both surfaces. Callers use `fetch()` for raw data or `to_domain(fetch(...))` for domain objects.
+
+`DataFetchError` wraps all provider-level network and parse failures.
+
+### Cache (`cache.py`)
+
+- Cache directory: `~/.neon/cache/<provider>/<key>.parquet`
+- Default TTL: 1 day for market data, 7 days for macro/curve data
+- Cache key: deterministic hash of the request parameters
+- Bypass: `adapter.fetch(..., cache=False)`
+
+### Domain mappings
+
+| Adapter method | Domain type |
+|---|---|
+| `YahooFinanceAdapter.spot(ticker)` | `float` |
+| `YahooFinanceAdapter.history(ticker)` | `pd.DataFrame` |
+| `YahooFinanceAdapter.option_chain(ticker, expiry)` | `list[OptionInputs]` |
+| `FREDAdapter.series(series_id)` | `pd.DataFrame` |
+| `FREDAdapter.yield_curve(date)` | `DiscountCurve` |
+| `USTreasuryAdapter.yield_curve(date)` | `DiscountCurve` |
+| `AlphaVantageAdapter.daily(symbol)` | `pd.DataFrame` |
+| `AlphaVantageAdapter.fx_rate(from_, to)` | `float` |
+
+---
+
+## 6. Code style
+
+- Match existing conventions: dataclasses and Pydantic models for value types, no mutable global state.
+- API keys injected via constructor or environment variable — never hardcoded.
+- Raise `ValueError` for missing API keys at construction time.
+- Raise `DataFetchError` (wrapping the original exception) for all network and parse failures.
+- No retries or backoff in scope — keep adapters thin.
+
+---
+
+## 7. Testing strategy
+
+- Unit tests mock all HTTP calls — no live network in CI.
+- Fixtures in `conftest.py` provide canned provider responses saved from real calls.
+- One integration test per adapter marked `@pytest.mark.integration` — skipped by default.
+- Test `to_domain()` output against domain type contracts (e.g. `DiscountCurve.df()` returns a valid discount factor ≤ 1).
+
+---
+
+## 8. Boundaries
+
+| Category | Rule |
+|---|---|
+| **Always** | Read API keys from environment variables |
+| **Always** | Return raw `pd.DataFrame` from `fetch()` before any domain mapping |
+| **Always** | Write a unit test for every `to_domain()` mapping |
+| **Ask first** | Adding a provider not in this spec |
+| **Ask first** | Changing cache directory or TTL defaults |
+| **Ask first** | Adding retry/backoff logic |
+| **Never** | Hardcode API keys or credentials anywhere in source |
+| **Never** | Make live network calls in unit tests |
+| **Never** | Mutate cached data in place |
+| **Never** | Add dependencies beyond `yfinance`, `fredapi`, and stdlib `urllib`/`xml` |
+
+---
+
+## 9. Implementation order
+
+1. **`base.py`** — `DataAdapter` ABC and `DataFetchError`; unblocks all adapters.
+2. **`cache.py`** — file-based cache; shared by all adapters.
+3. **`USTreasuryAdapter`** — no auth, simplest to test; validates the cache and `DiscountCurve` mapping end-to-end.
+4. **`FREDAdapter`** — macro rates and yield curve; requires `FRED_API_KEY`.
+5. **`YahooFinanceAdapter`** — spot, history, option chain → `OptionInputs`.
+6. **`AlphaVantageAdapter`** — daily OHLCV and FX; requires `ALPHA_VANTAGE_API_KEY`.
+
+---
+
+# SPEC: TSLA Dashboard — Phase 4
+
+## 1. Objective
+
+A small-team web dashboard for TSLA options analytics. The frontend is a React single-page app deployed to Vercel; the backend is a FastAPI service deployed to Railway. The backend wraps the existing `neon` library (data adapters, Greeks, vol surface) and exposes JSON endpoints. The frontend renders interactive charts and tables.
+
+Target users: a small quant team accessing the dashboard via browser, no local setup required.
+
+---
+
+## 2. Tech stack
+
+| Layer | Tool | Notes |
+|---|---|---|
+| Backend | FastAPI | Python, thin API over `neon` lib |
+| Frontend | React + TypeScript | Vite for build tooling |
+| Charts | Recharts or Plotly.js | Plotly preferred for finance charts |
+| Deployment | Vercel (frontend) + Railway (backend) | Both have free tiers |
+| Data | `YahooFinanceAdapter` | Live TSLA data, file-cached |
+
+---
+
+## 3. Commands
+
+```bash
+# Backend
+uv add fastapi uvicorn
+uv run uvicorn neon.api.main:app --reload   # dev server at localhost:8000
+
+# Frontend (requires Node.js ≥ 20)
+npm create vite@latest dashboard -- --template react-ts
+cd dashboard && npm install && npm run dev  # dev server at localhost:5173
+
+# Deploy
+railway up                                  # deploy backend
+vercel --prod                               # deploy frontend
+```
+
+Environment variables:
+```bash
+# Backend (.env / Railway)
+ALLOWED_ORIGINS=https://your-app.vercel.app
+
+# Frontend (.env / Vercel)
+VITE_API_URL=https://your-api.railway.app
+```
+
+---
+
+## 4. Project structure
+
+```
+src/neon/api/
+    __init__.py
+    main.py          # FastAPI app, CORS, router registration
+    routers/
+        stock.py     # GET /stock/{ticker}/history
+        options.py   # GET /stock/{ticker}/options/{expiry}
+        greeks.py    # GET /stock/{ticker}/greeks/{expiry}
+        surface.py   # GET /stock/{ticker}/surface
+
+dashboard/           # Vite + React project (separate dir, deployed to Vercel)
+    src/
+        api/
+            client.ts        # typed fetch wrappers for each endpoint
+        components/
+            PriceChart.tsx   # OHLCV candlestick (Plotly)
+            OptionsTable.tsx # calls/puts chain with IV, delta, gamma
+            GreeksHeatmap.tsx # delta/gamma/vega across strikes × expiries
+            VolSurface.tsx   # 3D implied vol surface (Plotly)
+        App.tsx
+    vite.config.ts
+    vercel.json
+```
+
+---
+
+## 5. API endpoints
+
+| Method | Path | Returns |
+|---|---|---|
+| `GET` | `/stock/{ticker}/history` | `{dates, opens, highs, lows, closes, volumes}` |
+| `GET` | `/stock/{ticker}/options/{expiry}` | `{calls: [...], puts: [...]}` each row: strike, iv, bid, ask, volume |
+| `GET` | `/stock/{ticker}/greeks/{expiry}` | `[{strike, delta, gamma, vega, theta}]` per strike |
+| `GET` | `/stock/{ticker}/surface` | `{strikes, expiries, vols}` for vol surface |
+
+All endpoints accept `?ticker=TSLA` as the default. Errors return `{"detail": "..."}` with appropriate HTTP status.
+
+---
+
+## 6. Dashboard panels
+
+1. **Price chart** — OHLCV candlestick for the past year. Ticker selector (default TSLA).
+2. **Options chain** — expiry date picker; table of calls and puts with strike, IV, bid, ask, volume, delta, gamma.
+3. **Greeks heatmap** — delta, gamma, or vega (selector) as a heatmap across strike × expiry.
+4. **Vol surface** — 3D surface plot of implied vol across all strikes and expiries.
+
+---
+
+## 7. Code style
+
+**Backend**
+- Thin routers — no business logic in routers; delegate to `neon.lib.data` and `neon.lib.greeks`.
+- Pydantic response models for every endpoint.
+- CORS restricted to `ALLOWED_ORIGINS` env var (comma-separated).
+
+**Frontend**
+- TypeScript strict mode.
+- One component per panel; `App.tsx` composes them.
+- `api/client.ts` is the only place that knows the API URL — never hardcode URLs in components.
+- No CSS frameworks in scope — plain CSS modules are fine.
+
+---
+
+## 8. Testing strategy
+
+**Backend**
+- Unit tests for each router using `httpx.AsyncClient` with `TestClient`.
+- Mock `YahooFinanceAdapter` — no live network in tests.
+- One test per endpoint: happy path + error (ticker not found).
+
+**Frontend**
+- No frontend tests in scope for the initial build.
+
+---
+
+## 9. Boundaries
+
+| Category | Rule |
+|---|---|
+| **Always** | Keep `VITE_API_URL` in env — never hardcode the Railway URL in source |
+| **Always** | Restrict CORS to the Vercel domain via `ALLOWED_ORIGINS` |
+| **Always** | Return Pydantic models from every FastAPI endpoint |
+| **Ask first** | Adding a new ticker beyond TSLA |
+| **Ask first** | Adding authentication |
+| **Never** | Put business logic (Greeks computation, vol calibration) in routers |
+| **Never** | Make live network calls in backend unit tests |
+| **Never** | Commit `.env` files |
+
+---
+
+## 10. Implementation order
+
+1. **FastAPI backend** — `main.py`, CORS, `/stock/{ticker}/history` endpoint + test.
+2. **Options endpoint** — `/options/{expiry}` using `YahooFinanceAdapter.option_chain()`.
+3. **Greeks endpoint** — compute `AnalyticalGreeks` per strike from options chain.
+4. **Surface endpoint** — build `VolatilitySurface` from IV grid.
+5. **React scaffold** — Vite project, `api/client.ts`, `PriceChart.tsx`.
+6. **Options chain table** — `OptionsTable.tsx` wired to `/options/{expiry}`.
+7. **Greeks heatmap** — `GreeksHeatmap.tsx` wired to `/greeks/{expiry}`.
+8. **Vol surface** — `VolSurface.tsx` wired to `/surface`.
+9. **Deploy** — Railway + Vercel, env vars, CORS.
