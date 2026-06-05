@@ -1,12 +1,14 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { fetchHistory } from '../api'
 
 interface Props {
   ticker: string
+  onSpot?: (spot: number) => void
 }
 
-export function PriceChart({ ticker }: Props) {
+export function PriceChart({ ticker, onSpot }: Props) {
   const { data, isPending, isError } = useQuery({
     queryKey: ['history', ticker],
     queryFn: () => fetchHistory(ticker),
@@ -14,6 +16,11 @@ export function PriceChart({ ticker }: Props) {
 
   if (isPending) return <div className="text-slate-400">Loading…</div>
   if (isError) return <div className="text-red-400">Failed to load price history.</div>
+
+  const latestClose = data.closes[data.closes.length - 1]
+  useEffect(() => {
+    if (onSpot && latestClose) onSpot(latestClose)
+  }, [latestClose, onSpot])
 
   const points = data.dates.map((date, i) => ({ date, close: data.closes[i] }))
 
