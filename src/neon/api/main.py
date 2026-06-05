@@ -30,3 +30,8 @@ app.include_router(surface.router)
 app.include_router(svi_surface.router)
 app.include_router(portfolio.router)
 app.include_router(bonds.router)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
