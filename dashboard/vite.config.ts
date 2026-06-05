@@ -7,6 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/stock': 'http://localhost:8000',
+      '/portfolio': 'http://localhost:8000',
+      '/bonds': 'http://localhost:8000',
     },
+  },
+  optimizeDeps: {
+    exclude: ['plotly.js', 'react-plotly.js'],
   },
 })
