@@ -2,11 +2,15 @@ import { useState } from 'react'
 import { PriceChart } from './components/PriceChart'
 import { OptionsChain } from './components/OptionsChain'
 import { GreeksTable } from './components/GreeksTable'
+import { VolSurface } from './components/VolSurface'
+import { IVSmile, DeltaSmile, GammaSmile, ThetaSmile } from './components/SmileChart'
+import { PortfolioGreeks } from './components/PortfolioGreeks'
+import { BondAnalytics } from './components/BondAnalytics'
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-slate-900 rounded-xl p-5 border border-slate-800">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">{title}</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">{title}</h2>
       {children}
     </div>
   )
@@ -25,10 +29,10 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight mb-4">neon dashboard</h1>
-        <form onSubmit={handleSubmit} className="flex gap-3 items-end">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="sticky top-0 z-10 bg-slate-950 border-b border-slate-800 px-6 py-4">
+        <form onSubmit={handleSubmit} className="flex gap-3 items-end flex-wrap">
+          <span className="text-lg font-bold tracking-tight mr-4">neon</span>
           <label className="flex flex-col gap-1 text-xs text-slate-400">
             Ticker
             <input
@@ -56,9 +60,13 @@ export default function App() {
         </form>
       </header>
 
-      <div className="grid gap-5">
+      <main className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Panel title={`${ticker} — 1Y Price`}>
           <PriceChart ticker={ticker} />
+        </Panel>
+
+        <Panel title={`${ticker} — Vol Surface (SVI)`}>
+          <VolSurface ticker={ticker} />
         </Panel>
 
         {expiry && (
@@ -66,12 +74,41 @@ export default function App() {
             <Panel title={`Options Chain — ${expiry}`}>
               <OptionsChain ticker={ticker} expiry={expiry} />
             </Panel>
-            <Panel title={`Greeks — ${expiry}`}>
+
+            <Panel title={`IV Smile — ${expiry}`}>
+              <IVSmile ticker={ticker} expiry={expiry} />
+            </Panel>
+
+            <Panel title={`Greeks Table — ${expiry}`}>
               <GreeksTable ticker={ticker} expiry={expiry} />
             </Panel>
+
+            <div className="grid grid-rows-3 gap-5">
+              <Panel title={`Delta — ${expiry}`}>
+                <DeltaSmile ticker={ticker} expiry={expiry} />
+              </Panel>
+              <Panel title={`Gamma — ${expiry}`}>
+                <GammaSmile ticker={ticker} expiry={expiry} />
+              </Panel>
+              <Panel title={`Theta — ${expiry}`}>
+                <ThetaSmile ticker={ticker} expiry={expiry} />
+              </Panel>
+            </div>
           </>
         )}
-      </div>
+
+        <div className="lg:col-span-2">
+          <Panel title="Portfolio Greeks">
+            <PortfolioGreeks />
+          </Panel>
+        </div>
+
+        <div className="lg:col-span-2">
+          <Panel title="Bond Analytics">
+            <BondAnalytics />
+          </Panel>
+        </div>
+      </main>
     </div>
   )
 }
