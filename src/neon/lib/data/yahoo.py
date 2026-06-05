@@ -33,6 +33,8 @@ class YahooFinanceAdapter(DataAdapter):
             raise DataFetchError(f"No data returned for {ticker}")
 
         df = raw.copy()
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1)
         df.columns = [c.lower() for c in df.columns]
         df = df.reset_index().rename(columns={"Date": "date", "index": "date"})
         df["date"] = pd.to_datetime(df["date"])
