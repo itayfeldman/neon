@@ -1,7 +1,9 @@
 import axios from 'axios'
 
-const http = axios.create({ baseURL: '/stock' })
-const api = axios.create()
+const BASE = import.meta.env.VITE_API_URL ?? ''
+
+const http = axios.create({ baseURL: `${BASE}/stock` })
+const api = axios.create({ baseURL: BASE })
 
 export interface HistoryResponse {
   dates: string[]

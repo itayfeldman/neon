@@ -25,6 +25,8 @@ jobs:
 
       - run: npm run build
         working-directory: dashboard
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       - name: Deploy to Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
