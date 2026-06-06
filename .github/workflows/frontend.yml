@@ -1,0 +1,35 @@
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+        working-directory: dashboard
+
+      - run: npm run build
+        working-directory: dashboard
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: dashboard/dist
+          skip_app_build: true
+          output_location: ''
