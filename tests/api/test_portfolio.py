@@ -43,36 +43,41 @@ class TestPortfolioGreeks:
             resp = client.post("/portfolio/greeks", json={"positions": [_ATM_CALL]})
         assert resp.status_code == 200
 
+    def _post(self, positions):
+        return client.post(
+            "/portfolio/greeks", json={"positions": positions}
+        ).json()
+
     def test_response_has_expected_fields(self):
         p1, p2 = _patch_adapter()
         with p1, p2:
-            data = client.post("/portfolio/greeks", json={"positions": [_ATM_CALL]}).json()
+            data = self._post([_ATM_CALL])
         assert set(data) == {"delta", "gamma", "vega", "theta"}
 
     def test_atm_call_delta_near_half(self):
         p1, p2 = _patch_adapter()
         with p1, p2:
-            data = client.post("/portfolio/greeks", json={"positions": [_ATM_CALL]}).json()
+            data = self._post([_ATM_CALL])
         assert 0.4 < data["delta"] < 0.7
 
     def test_atm_call_gamma_and_vega_positive(self):
         p1, p2 = _patch_adapter()
         with p1, p2:
-            data = client.post("/portfolio/greeks", json={"positions": [_ATM_CALL]}).json()
+            data = self._post([_ATM_CALL])
         assert data["gamma"] > 0
         assert data["vega"] > 0
 
     def test_atm_call_theta_negative(self):
         p1, p2 = _patch_adapter()
         with p1, p2:
-            data = client.post("/portfolio/greeks", json={"positions": [_ATM_CALL]}).json()
+            data = self._post([_ATM_CALL])
         assert data["theta"] < 0
 
     def test_negative_quantity_flips_greeks(self):
         short_call = {**_ATM_CALL, "quantity": -1}
         p1, p2 = _patch_adapter()
         with p1, p2:
-            data = client.post("/portfolio/greeks", json={"positions": [short_call]}).json()
+            data = self._post([short_call])
         assert data["delta"] < 0
         assert data["gamma"] < 0
 

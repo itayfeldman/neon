@@ -41,5 +41,8 @@ testpaths = ["tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
+[tool.ruff.lint.per-file-ignores]
+"notebooks/**" = ["E501"]
+
 [tool.coverage.run]
 source = ["src/neon"]
