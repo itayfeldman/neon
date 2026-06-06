@@ -61,4 +61,10 @@ jobs:
             --resource-group rg-neon \
             --query properties.configuration.ingress.fqdn \
             --output tsv)
-          curl --fail "https://${FQDN}/health"
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${FQDN}/health" || true)
+            [ "$STATUS" = "200" ] && echo "Health check passed" && exit 0
+            echo "Attempt $i: got $STATUS, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 2 minutes" && exit 1
