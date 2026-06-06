@@ -113,7 +113,17 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
+// ── Static Web Apps ───────────────────────────────────────────────────────────
+resource swa 'Microsoft.Web/staticSites@2023-01-01' = {
+  name: 'neon-dashboard'
+  location: 'eastus2'
+  sku: { name: 'Free', tier: 'Free' }
+  properties: {}
+}
+
 // ── Outputs ───────────────────────────────────────────────────────────────────
 output acrLoginServer string = acr.properties.loginServer
 output containerAppFqdn string = containerApp.properties.configuration.ingress.fqdn
 output keyVaultName string = keyVault.name
+output swaHostname string = swa.properties.defaultHostname
+output swaApiToken string = swa.listSecrets().properties.apiKey
