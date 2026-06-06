@@ -3,6 +3,7 @@ tests/
 docs/
 notebooks/
 *.md
+!README.md
 .git/
 .venv/
 .vscode/

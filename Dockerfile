@@ -1,6 +1,6 @@
 FROM python:3.13-slim
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN pip install uv && uv sync --no-dev --no-install-project
 COPY src/ src/
 RUN uv sync --no-dev
